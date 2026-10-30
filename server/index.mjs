@@ -114,7 +114,7 @@ const server=http.createServer(async(req,res)=>{
       }
       if(path==='/api/logs'&&method==='GET') {try{return json(res,store.logs.query(Object.fromEntries(url.searchParams)));}catch(e){fail(e.message);}}
       if(path==='/api/diagnostics'&&method==='GET') {
-        const s=controller.state();return json(res,redact({app:'torrent-harbor',version:appMeta.version,exported:new Date().toISOString(),settings:s.settings,clients:s.clients.map(({id,name,type,online,version,error,native,time})=>({id,name,type,online,version,error,native,time})),rules:s.rules.length,pools:s.pools.length,managed:s.managed.length,logs:store.logs.query({...Object.fromEntries(url.searchParams),page:1,pageSize:200}).rows,note:'不含连接配置、密码或恢复密钥；日志可能包含任务名称、标识及错误上下文，凭证已自动隐藏。'},0,200));
+        const s=controller.state();return json(res,redact({app:'torrent-harbor',version:appMeta.version,exported:new Date().toISOString(),settings:s.settings,clients:s.clients.map(({id,name,type,online,version,error,native,time})=>({id,name,type,online,version,error,native,time})),rules:s.rules.length,pools:s.pools.length,managed:s.managed.length,limitStatus:s.limitStatus,logs:store.logs.query({...Object.fromEntries(url.searchParams),page:1,pageSize:200}).rows,note:'不含连接配置、密码或恢复密钥；日志可能包含任务名称、标识及错误上下文，凭证已自动隐藏。'},0,200));
       }
       if(path==='/api/updates'&&method==='GET') return json(res,updates.status());
       if(path.startsWith('/api/updates/')&&method!=='GET') {

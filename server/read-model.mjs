@@ -1,5 +1,6 @@
 import { ruleRevision } from './rule-order.mjs';
 import { activeRuns, quickRevision } from './quick-actions.mjs';
+import {limitStatuses,limitKey} from './limit-status.mjs';
 
 const pageSizes = [25, 50, 100, 200, 300];
 const bad = message => { throw Object.assign(new Error(message), {status:400}); };
@@ -8,7 +9,7 @@ export class ReadModel {
   constructor(controller, version) { this.controller=controller; this.store=controller.store; this.version=version; }
   snapshot(now=Date.now()) {
     const c=this.controller, s=this.store;
-    const stamp=JSON.stringify([s.db.prepare('SELECT total_changes() AS n').get().n,s.db.prepare('PRAGMA data_version').get().data_version,c.busy,c.lastControl,c.lastSample,c.error,[...c.runtime].map(([id,r])=>[id,r.time,r.checked,r.online]),Math.floor(now/5000)]);
+    const stamp=JSON.stringify([s.db.prepare('SELECT total_changes() AS n').get().n,s.db.prepare('PRAGMA data_version').get().data_version,c.limitRevision,c.busy,c.lastControl,c.lastSample,c.error,[...c.runtime].map(([id,r])=>[id,r.time,r.checked,r.online]),Math.floor(now/5000)]);
     if(this.cached?.stamp===stamp)return this.cached;
     // apply() holds and annotates its plan across awaits. A read must not replace that plan.
     if(!c.busy)c.replan();
@@ -22,9 +23,11 @@ export class ReadModel {
     const ruleCounts={};
     for(const t of rows){const p=t.plan, v=poolStats[p?.poolId];if(v){v.count++;if(t.online&&!t.stale){v.upload+=t.upload;v.download+=t.download;}else v.offline++;if(t.updated)v.time=Math.min(v.time??Infinity,t.updated);v.allocated+=p?.upload||0;}for(const r of p?.matchedRules||[])ruleCounts[r.id]=(ruleCounts[r.id]||0)+1;}
     const owned=Object.values(s.get('managed',{})).filter(m=>m.mode===settings.mode);
-    const summary={version:this.version,settings,clients,pools,poolStats,ruleCounts,total:rows.length,active:clients.reduce((n,v)=>n+v.active,0),managedCount:owned.length,conflictCount:owned.filter(m=>m.conflict||Object.hasOwn(m,'pending')).length,matchedCount:rows.filter(t=>t.plan?.managed).length,blocked:c.plan.find(p=>p.execution?.includes('本轮限速计划未执行'))?.execution||'',history:s.history(settings.mode),topTorrents:[...rows].filter(t=>t.online).sort((a,b)=>b.upload+b.download-a.upload-a.download||a.key.localeCompare(b.key)).slice(0,5),syncing:c.busy,lastControl:c.lastControl,error:c.error,now};
+    const statuses=limitStatuses(owned,c.limitOperations,c.limitResults,settings.mode);
+    const summary={version:this.version,settings,clients,pools,poolStats,ruleCounts,total:rows.length,active:clients.reduce((n,v)=>n+v.active,0),managedCount:owned.length,conflictCount:statuses.counts.attention,matchedCount:rows.filter(t=>t.plan?.managed).length,blocked:c.plan.find(p=>p.execution?.includes('本轮限速计划未执行'))?.execution||'',history:s.history(settings.mode),topTorrents:[...rows].filter(t=>t.online).sort((a,b)=>b.upload+b.download-a.upload-a.download||a.key.localeCompare(b.key)).slice(0,5),syncing:c.busy,lastControl:c.lastControl,error:c.error,now};
     summary.quickActions={revision:quickRevision(s.get('quickActions',[])),runs:activeRuns(s,now)};
-    this.cached={stamp,rows,byKey,plans,summary,owned}; return this.cached;
+    summary.limitStatus=statuses.counts;
+    this.cached={stamp,rows,byKey,plans,summary,owned,statuses}; return this.cached;
   }
   summary(){return this.snapshot().summary;}
   workspace(){const s=this.store;return {configuredClients:s.publicClients(),rules:s.get('rules',[]),ruleRevision:ruleRevision(s.get('rules',[]))};}
@@ -42,5 +45,5 @@ export class ReadModel {
     const pages=Math.max(1,Math.ceil(filtered.length/size)), current=Math.min(page,pages);
     return {rows:filtered.slice((current-1)*size,current*size),total:filtered.length,page:current,pageSize:size,pages};
   }
-  detail(key){const s=this.snapshot(),torrent=s.byKey.get(key);if(!torrent)throw Object.assign(new Error('种子已不存在，请刷新列表'),{status:404});return {torrent,managed:s.owned.filter(m=>m.key===key)};}
+  detail(key){const s=this.snapshot(),torrent=s.byKey.get(key);if(!torrent)throw Object.assign(new Error('种子已不存在，请刷新列表'),{status:404});return {torrent,managed:s.owned.filter(m=>m.key===key).map(m=>({...m,status:s.statuses.byKey.get(limitKey(m))})),limitIssues:[...this.controller.limitResults].filter(([k])=>k.startsWith(this.store.get('settings').mode+'|'+key+'|')).map(([k,v])=>({...v,direction:k.split('|').at(-1)}))};}
 }

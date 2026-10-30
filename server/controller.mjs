@@ -3,9 +3,13 @@ import { DemoAdapter } from './demo.mjs';
 import { buildPlan, sameLimit } from './engine.mjs';
 import { ruleRevision } from './rule-order.mjs';
 import { QuickActions, activeRuns, quickPolicy } from './quick-actions.mjs';
+import { limitStatuses } from './limit-status.mjs';
 
 export class Controller {
-  constructor(store) { this.store = store; this.adapters = new Map(); this.runtime = new Map(); this.results = new Map(); this.plan = []; this.lastControl = 0; this.lastSample = 0; this.busy = false; this.timer = null; this.error = ''; this.quickActions=new QuickActions(this); }
+  constructor(store) { this.store = store; this.adapters = new Map(); this.runtime = new Map(); this.results = new Map(); this.limitOperations=new Map(); this.limitResults=new Map(); this.limitRevision=0; this.plan = []; this.lastControl = 0; this.lastSample = 0; this.busy = false; this.timer = null; this.error = ''; this.quickActions=new QuickActions(this); }
+  operation(key,phase) { if(phase)this.limitOperations.set(key,{phase,since:Date.now()});else this.limitOperations.delete(key);this.limitRevision++; }
+  issue(key,state,message) { this.limitResults.set(key,{state,message,time:Date.now()});this.limitRevision++; }
+  clearIssue(key) { if(this.limitResults.delete(key))this.limitRevision++; }
   clients() { const mode = this.store.get('settings').mode; return this.store.get('clients',[]).filter(c => c.enabled && Boolean(c.demo) === (mode === 'demo')); }
   adapter(c) {
     const signature = JSON.stringify(c), cached = this.adapters.get(c.id);
@@ -85,8 +89,12 @@ export class Controller {
         try {
           const current = p[dir === 'upload' ? 'currentUpload':'currentDownload'], record = owned[key];
           if (record && (record.conflict || Object.hasOwn(record,'pending') || !sameLimit(current,record.last))) {
-            if (!record.conflict) this.store.event('检测到外部限速修改',`${p.name}：已保留外部值并停止接管该方向。可在详情中重新接管。`,'warning');
-            record.conflict = true; p.execution = '外部修改，已让出控制'; blockIncrease = true; continue;
+            const uncertain=Object.hasOwn(record,'pending');
+            if (!record.conflict) {
+              if(uncertain)this.store.event('上次限速写入未确认',`${p.name}：保留恢复记录，等待核对后重新接管`,'warning',{code:'limit.pending_recovery',clientId:c.id,torrentId:p.torrentId,direction:dir});
+              else {record.issue='external';record.issueMessage='下载器当前值与上次回读确认值不同';record.issueTime=Date.now();this.store.event('检测到外部限速修改',`${p.name}：已保留外部值并停止接管该方向。可在详情中重新接管。`,'warning',{code:'limit.external_change',clientId:c.id,torrentId:p.torrentId,direction:dir});}
+            }
+            record.conflict = true; p.execution = record.issue==='failed'?'写入或回读失败，等待核对':uncertain?'上次写入未确认，等待核对':'外部修改或历史冲突，已让出控制'; blockIncrease = true; continue;
           }
           if (!sameLimit(current,target) || !record) tasks.push({key,p,dir,target,current,adapter,c,record});
           else p.execution='已回读确认（保持）';
@@ -104,14 +112,18 @@ export class Controller {
     const execute = async task => {
       const {key,p,dir,target,current,adapter,c,record} = task;
       try {
+        this.clearIssue(key);
+        this.operation(key,'preparing');
         // Check again immediately before writing; native APIs do not provide compare-and-set.
-        if (!sameLimit(await adapter.readLimit(p.torrentId,dir),current)) throw new Error('写入前值已变化，本轮跳过');
+        if (!sameLimit(await adapter.readLimit(p.torrentId,dir),current)) throw Object.assign(new Error('写入前值已变化，本轮跳过'),{limitIssue:'external'});
         // Persist intent before I/O so a process crash cannot lose the baseline.
         const baselineState=record?.baselineState || (!record && adapter.readLimitState ? await adapter.readLimitState(p.torrentId,dir):undefined);
-        if(!record && baselineState && !sameLimit(baselineState.value,current)) throw new Error('备份原始限速时设置已变化，本轮跳过');
+        if(!record && baselineState && !sameLimit(baselineState.value,current)) throw Object.assign(new Error('备份原始限速时设置已变化，本轮跳过'),{limitIssue:'external'});
         owned[key] = {...record,mode,key:p.key,clientId:c.id,torrentId:p.torrentId,name:p.name,direction:dir,baseline:record ? record.baseline:current,baselineState,last:record ? record.last:current,pending:target,conflict:false};
         this.store.set('managed',owned);
+        this.operation(key,'writing');
         await adapter.setLimit(p.torrentId,dir,target);
+        this.operation(key,'confirming');
         const confirmed = await adapter.readLimit(p.torrentId,dir);
         if (!sameLimit(confirmed,target)) throw new Error('下载器回读值与目标不符');
         owned[key].last = confirmed; delete owned[key].pending; owned[key].time = Date.now();
@@ -121,13 +133,16 @@ export class Controller {
         this.store.set('managed',owned); return true;
       } catch(e) {
         p.execution = e.message; blockIncrease = true;
+        const external=e.limitIssue==='external';
+        this.issue(key,external?'conflict':'failed',e.message);
         if (owned[key]) {
           // A failed response can still mean the remote write succeeded. Freeze the intent.
           owned[key].conflict = true;
+          owned[key].issue=external?'external':'failed';owned[key].issueMessage=e.message;owned[key].issueTime=Date.now();
           this.store.set('managed',owned);
         }
-        this.store.event('限速修改未确认',`${p.name}：${e.message}`,'warning',{code:'limit.unconfirmed',clientId:c.id,torrentId:p.torrentId,direction:dir,previous:current,target,error:e.message}); return false;
-      }
+        this.store.event(external?'检测到外部限速修改':'限速修改未确认',`${p.name}：${e.message}`,'warning',{code:external?'limit.external_change':'limit.unconfirmed',clientId:c.id,torrentId:p.torrentId,direction:dir,previous:current,target,error:e.message}); return false;
+      } finally { this.operation(key,null); }
     };
     for (const task of decreasing) await execute(task);
     if (!blockIncrease) for (const task of increasing) { if (!await execute(task)) break; }
@@ -137,6 +152,7 @@ export class Controller {
       if (!await this.restoreRecord(key,record,owned,liveByKey)) blockIncrease = true;
     }
     this.store.set('managed',owned);
+    for(const key of this.limitResults.keys())if(key.startsWith(mode+'|')&&!valid.has(key)&&!owned[key])this.clearIssue(key);
     this.plan.forEach(p=>this.results.set(p.key,p.execution || ''));
   }
   async restoreRecord(key, record, owned, liveByKey) {
@@ -150,6 +166,7 @@ export class Controller {
     const adapter = this.adapter(c);
     try {
       if (!sameLimit(await adapter.readLimit(record.torrentId,record.direction),record.last)) {
+        record.issue='external';record.issueMessage='恢复前发现下载器限速被外部修改';record.issueTime=Date.now();
         record.conflict = true; this.store.event('恢复已跳过',`${record.name} 的限速已被外部修改，保留当前设置`,'warning'); return false;
       }
       if(record.baselineState && adapter.restoreLimitState) await adapter.restoreLimitState(record.torrentId,record.direction,record.baselineState);
@@ -160,7 +177,7 @@ export class Controller {
         for(const field of Object.keys(record.baselineState)) if(restored[field]!==record.baselineState[field]) throw new Error('原始限速开关或保留值未完整恢复');
       }
       const torrent = rt.torrents.find(t=>String(t.id)===String(record.torrentId)); if (torrent) torrent[`${record.direction}Limit`] = record.baseline;
-      delete owned[key]; this.store.event('已恢复接管前设置',record.name,'success'); return true;
+      delete owned[key]; this.clearIssue(key);this.store.event('已恢复接管前设置',record.name,'success'); return true;
     } catch(e) { this.store.event('恢复未完成',`${record.name}：${e.message}`,'warning'); return false; }
   }
   async release() {
@@ -172,6 +189,7 @@ export class Controller {
       const owned = this.store.get('managed',{}), prefix = `${this.store.get('settings').mode}|`;
       const liveByKey = new Map(this.torrents().map(t=>[t.key,t]));
       for (const [key,record] of Object.entries(owned).filter(([k])=>k.startsWith(prefix))) { await this.restoreRecord(key,record,owned,liveByKey); this.store.set('managed',owned); }
+      for(const key of this.limitResults.keys())if(key.startsWith(prefix)&&!owned[key])this.clearIssue(key);
       return { remaining:Object.keys(owned).filter(k=>k.startsWith(prefix)).length };
     } finally { this.busy = false; }
   }
@@ -186,19 +204,20 @@ export class Controller {
       const k = this.managedKey(key,dir), rec = owned[k]; if (!rec) continue;
       const current = await adapter.readLimit(p.torrentId,dir);
       // Resolve an uncertain write by adopting the actual value, while retaining the original baseline.
-      rec.last = current; rec.conflict = false; delete rec.pending;
+      rec.last = current; rec.conflict = false; delete rec.pending;delete rec.issue;delete rec.issueMessage;delete rec.issueTime;this.clearIssue(k);
     }
     this.store.set('managed',owned); this.store.event('已重新接管任务',p.name);
     } finally { this.busy = false; }
   }
   state() {
-    this.replan();
+    if(!this.busy)this.replan();
     const clients = this.clients().map(c => {
       const rt = this.runtime.get(c.id) || {};
       return { id:c.id,name:c.name,type:c.type,demo:c.demo,online:!!rt.online,version:rt.version || '',upload:rt.online ? rt.upload:0,download:rt.online ? rt.download:0,torrentCount:rt.torrents?.length || 0,active:rt.torrents?.filter(t=>t.upload+t.download>0).length || 0,time:rt.time,error:rt.error || '',native:rt.native };
     });
     const managed = this.store.get('managed',{});
-    return { settings:this.store.get('settings'),clients,configuredClients:this.store.publicClients(),pools:this.store.get('pools',[]),rules:this.store.get('rules',[]),ruleRevision:ruleRevision(this.store.get('rules',[])),torrents:this.torrents(),plan:this.plan,managed:Object.values(managed).filter(m=>m.mode===this.store.get('settings').mode),history:this.store.history(this.store.get('settings').mode),events:this.store.events(),syncing:this.busy,lastControl:this.lastControl,error:this.error,now:Date.now() };
+    const limitStatus=limitStatuses(Object.values(managed).filter(m=>m.mode===this.store.get('settings').mode),this.limitOperations,this.limitResults,this.store.get('settings').mode).counts;
+    return { settings:this.store.get('settings'),clients,configuredClients:this.store.publicClients(),pools:this.store.get('pools',[]),rules:this.store.get('rules',[]),ruleRevision:ruleRevision(this.store.get('rules',[])),torrents:this.torrents(),plan:this.plan,managed:Object.values(managed).filter(m=>m.mode===this.store.get('settings').mode),limitStatus,history:this.store.history(this.store.get('settings').mode),events:this.store.events(),syncing:this.busy,lastControl:this.lastControl,error:this.error,now:Date.now() };
   }
   start() { const loop = async () => { await this.refresh(); this.timer = setTimeout(loop,this.store.get('settings').pollSeconds*1000); }; void loop(); }
   stop() { clearTimeout(this.timer); }

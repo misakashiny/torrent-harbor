@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
 import ConnectionSummary from './ConnectionSummary.vue';
 import QuickActions from './QuickActions.vue';
+import LimitStatus from './LimitStatus.vue';
 import { ArrowDown, ArrowUp, ChevronRight, AlertTriangle } from 'lucide-vue-next';
 import TrafficSummary from './TrafficSummary.vue';
 import SiteIcon from './SiteIcon.vue';
@@ -31,7 +32,8 @@ const age=computed(()=>{const ts=props.data.clients.filter(c=>c.online&&c.time).
     <div class="overview-primary">
     <section class="panel live-panel">
       <div class="live-status"><span><i class="dot" :class="online===data.clients.length&&online?'green-dot':'warning-dot'"></i>{{online}} / {{data.clients.length}} 下载器在线</span><span>同步 {{age}}</span></div>
-      <button v-if="data.conflictCount||data.error||data.blocked||online<data.clients.length" class="overview-alert" @click="emit('navigate','activity')"><AlertTriangle :size="17"/><span>{{data.error||data.blocked||(data.conflictCount?`${data.conflictCount} 项限速待确认`:'有下载器未连接或同步已过期')}} · 查看记录</span><ChevronRight :size="16"/></button>
+      <button v-if="data.error||data.blocked||online<data.clients.length" class="overview-alert" @click="emit('navigate','activity')"><AlertTriangle :size="17"/><span>{{data.error||data.blocked||'有下载器未连接或同步已过期'}} · 查看记录</span><ChevronRight :size="16"/></button>
+      <LimitStatus :status="data.limitStatus" @inspect="emit('navigate','activity')"/>
       <div class="live-rates"><div><span><ArrowDown :size="17"/>实时下载</span><strong>{{online?format(rate('download')):'—'}}</strong></div><div><span><ArrowUp :size="17"/>实时上传</span><strong>{{online?format(rate('upload')):'—'}}</strong></div></div>
       <div class="trend-heading"><div><span class="chart-key download-key"></span>下载 <span class="chart-key upload-key"></span>上传</div><select v-model.number="minutes" aria-label="实时速率图时间范围"><option :value="5">最近 5 分钟</option><option :value="15">最近 15 分钟</option></select></div>
       <div class="rate-chart" role="img" :aria-label="`最近 ${minutes} 分钟实际采样速率；${history.length} 个采样点`"><div class="chart-labels"><span>{{format(max)}}</span><span>{{format(max/2)}}</span><span>0</span></div><div class="chart-plot"><div class="chart-grid"><i></i><i></i><i></i></div><svg viewBox="0 0 800 160" preserveAspectRatio="none" aria-hidden="true"><path :d="path('upload')" class="upload-line"/><path :d="path('download')" class="download-line"/></svg><p v-if="history.length<2" class="chart-empty">等待连续采样</p></div></div>
