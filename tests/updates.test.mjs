@@ -32,3 +32,11 @@ test('检查失败保留已知版本并给出可读错误',async()=>{
   const root=mkdtempSync(join(tmpdir(),'harbor-update-error-'));const store=new Store(root);
   try{const manager=new UpdateManager(store,{version:'1.1.0',fetcher:async()=>({ok:false,status:404})});const result=await manager.check();assert.match(result.error,/尚无正式发布/);assert.equal(result.available,false);}finally{store.close();rmSync(root,{recursive:true,force:true});}
 });
+test('GitHub 连接短暂中断会重试，权限错误不会重复请求',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'harbor-update-retry-'));const store=new Store(root);let calls=0;
+  try{
+    const manager=new UpdateManager(store,{version:'1.1.0',fetcher:async()=>{calls++;if(calls===1)throw new TypeError('temporary TLS failure');return {ok:true,status:200,json:async()=>({id:1,tag_name:'v1.1.1',assets:[]})};}});
+    assert.equal((await manager.check()).error,'');assert.equal(calls,2);
+    calls=0;manager.fetcher=async()=>{calls++;return {ok:false,status:403};};assert.match((await manager.check()).error,/请求受限/);assert.equal(calls,1);
+  }finally{store.close();rmSync(root,{recursive:true,force:true});}
+});

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Host-side updater. The web container never receives the Docker socket."""
-import argparse,datetime,gzip,hashlib,json,os,pathlib,platform,re,shutil,sqlite3,subprocess,tarfile,time,urllib.request,urllib.error,urllib.parse,uuid
+import argparse,datetime,gzip,hashlib,http.client,json,os,pathlib,platform,re,shutil,sqlite3,subprocess,tarfile,time,urllib.request,urllib.error,urllib.parse,uuid
 
 VERSION=re.compile(r'^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$')
 ACTIVE={'queued','downloading','verifying','backing-up','installing','checking','rolling-back'}
@@ -73,10 +73,18 @@ class Updater:
     def fetch_bytes(self,url,limit=1024*1024):
         validate_download_url(url)
         headers={'User-Agent':'TorrentHarborUpdater/1.1','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2026-03-10'}
-        with self.opener.open(urllib.request.Request(url,headers=headers),timeout=30) as response:
-            data=response.read(limit+1)
+        def receive():
+            with self.opener.open(urllib.request.Request(url,headers=headers),timeout=30) as response:return response.read(limit+1)
+        data=self.retry_network(receive)
         if len(data)>limit:raise ValueError('Update metadata too large')
         return data
+    def retry_network(self,operation):
+        for attempt in range(3):
+            try:return operation()
+            except (OSError,http.client.HTTPException) as error:
+                if isinstance(error,urllib.error.HTTPError) and error.code<500 and error.code!=429:raise
+                if attempt==2:raise
+                self.heartbeat();time.sleep(attempt+1)
     def download(self,job):
         version=validate_tag(job['tag']);tag='v'+version
         release=json.loads(self.fetch_bytes(f'https://api.github.com/repos/{self.repository}/releases/tags/{tag}'))
@@ -92,25 +100,35 @@ class Updater:
         size=assets[expected]['size']
         if not 0<size<350*1024*1024:raise ValueError('Release image size is outside the supported range')
         cache=self.root/'update-cache';cache.mkdir(exist_ok=True)
-        path=cache/expected;temp=cache/(expected+'.part');digest=hashlib.sha256();received=0
-        self.status(job,'downloading','正在下载 GitHub 发布镜像',received=0,total=size)
+        path=cache/expected;temp=cache/(expected+'.part')
         request=urllib.request.Request(assets[expected]['browser_download_url'],headers={'User-Agent':'TorrentHarborUpdater/1.1'})
         try:
-            with self.opener.open(request,timeout=45) as response,temp.open('wb') as file:
-                last=0
-                while True:
-                    chunk=response.read(1024*1024)
-                    if not chunk:break
-                    received+=len(chunk)
-                    if received>size:raise ValueError('Release image is larger than its published size')
-                    file.write(chunk);digest.update(chunk)
-                    if time.time()-last>1:self.status(job,'downloading','正在下载 GitHub 发布镜像',received=received,total=size);self.heartbeat();last=time.time()
-            if received!=size or digest.hexdigest()!=checksum:raise ValueError('安装包 SHA-256 校验失败')
+            cached=False
+            if path.is_file() and path.stat().st_size==size:
+                digest=hashlib.sha256()
+                with path.open('rb') as file:
+                    for chunk in iter(lambda:file.read(1024*1024),b''):digest.update(chunk)
+                cached=digest.hexdigest()==checksum
+            if not cached:
+                def receive_image():
+                    digest=hashlib.sha256();received=0
+                    self.status(job,'downloading','正在下载 GitHub 发布镜像',received=0,total=size)
+                    with self.opener.open(request,timeout=45) as response,temp.open('wb') as file:
+                        last=0
+                        while True:
+                            chunk=response.read(1024*1024)
+                            if not chunk:break
+                            received+=len(chunk)
+                            if received>size:raise ValueError('Release image is larger than its published size')
+                            file.write(chunk);digest.update(chunk)
+                            if time.time()-last>1:self.status(job,'downloading','正在下载 GitHub 发布镜像',received=received,total=size);self.heartbeat();last=time.time()
+                    if received!=size or digest.hexdigest()!=checksum:raise ValueError('安装包 SHA-256 校验失败')
+                self.retry_network(receive_image)
             published=assets[expected].get('digest')
             if published and published!='sha256:'+checksum:raise ValueError('GitHub 摘要与校验文件不一致')
-            self.status(job,'verifying','正在校验镜像身份与架构')
-            validate_image_archive(temp,'torrent-harbor:'+version)
-            os.replace(temp,path)
+            self.status(job,'verifying','正在校验缓存镜像身份与架构' if cached else '正在校验镜像身份与架构',cacheUsed=cached)
+            validate_image_archive(path if cached else temp,'torrent-harbor:'+version)
+            if not cached:os.replace(temp,path)
             command(['docker','image','load','-i',str(path)],timeout=180)
             image=json.loads(command(['docker','image','inspect','torrent-harbor:'+version]))[0]
             wanted='arm64' if self.platform.endswith('arm64') else 'amd64'

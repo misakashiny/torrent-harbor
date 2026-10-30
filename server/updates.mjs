@@ -56,7 +56,15 @@ export class UpdateManager {
     try {
       const headers={Accept:'application/vnd.github+json','User-Agent':'TorrentHarbor/'+this.version,'X-GitHub-Api-Version':'2026-03-10'};
       const token=this.store.get('updatesToken');if(token)headers.Authorization='Bearer '+this.store.unseal(token);
-      const response=await this.fetcher(`https://api.github.com/repos/${repositoryName(config.repository)}/releases/latest`,{headers,signal:AbortSignal.timeout(20000),redirect:'error'});
+      let response;
+      for(let attempt=0;attempt<3;attempt++) {
+        try {
+          response=await this.fetcher(`https://api.github.com/repos/${repositoryName(config.repository)}/releases/latest`,{headers,signal:AbortSignal.timeout(20000),redirect:'error'});
+          if(response.status<500||attempt===2)break;
+          await response.body?.cancel();
+        } catch(error) { if(attempt===2)throw error; }
+        await new Promise(resolve=>setTimeout(resolve,300*(attempt+1)));
+      }
       if(response.status===404) throw new Error('尚无正式发布版本，或私有仓库缺少读取权限');
       if(response.status===403||response.status===429) throw new Error('GitHub 请求受限，请稍后重试');
       if(!response.ok) throw new Error(`GitHub 检查失败（HTTP ${response.status}）`);
