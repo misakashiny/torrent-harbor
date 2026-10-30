@@ -2,9 +2,10 @@ import { createAdapter } from './adapters.mjs';
 import { DemoAdapter } from './demo.mjs';
 import { buildPlan, sameLimit } from './engine.mjs';
 import { ruleRevision } from './rule-order.mjs';
+import { QuickActions, activeRuns, quickPolicy } from './quick-actions.mjs';
 
 export class Controller {
-  constructor(store) { this.store = store; this.adapters = new Map(); this.runtime = new Map(); this.results = new Map(); this.plan = []; this.lastControl = 0; this.lastSample = 0; this.busy = false; this.timer = null; this.error = ''; }
+  constructor(store) { this.store = store; this.adapters = new Map(); this.runtime = new Map(); this.results = new Map(); this.plan = []; this.lastControl = 0; this.lastSample = 0; this.busy = false; this.timer = null; this.error = ''; this.quickActions=new QuickActions(this); }
   clients() { const mode = this.store.get('settings').mode; return this.store.get('clients',[]).filter(c => c.enabled && Boolean(c.demo) === (mode === 'demo')); }
   adapter(c) {
     const signature = JSON.stringify(c), cached = this.adapters.get(c.id);
@@ -31,6 +32,7 @@ export class Controller {
           if (!old || old.online) this.store.event('下载器连接异常',`${c.name}：${e.message}`,'warning',{clientId:c.id,clientName:c.name});
         }
       }));
+      this.quickActions.expire();
       this.replan();
       const settings = this.store.get('settings');
       if (control && settings.controlEnabled && Date.now()-this.lastControl >= settings.controlSeconds*1000) {
@@ -54,7 +56,7 @@ export class Controller {
       });
     });
   }
-  replan() { this.plan = buildPlan(this.torrents(),this.store.get('rules',[]),this.store.get('pools',[]),this.store.get('settings'),this.store.get('overrides',{})).map(p=>({...p,execution:this.results.get(p.key)||''})); }
+  replan() { this.plan = buildPlan(this.torrents(),this.store.get('rules',[]),this.store.get('pools',[]),this.store.get('settings'),this.store.get('overrides',{}),new Date(),quickPolicy(activeRuns(this.store))).map(p=>({...p,execution:this.results.get(p.key)||''})); }
   managedKey(key,dir) { return `${this.store.get('settings').mode}|${key}|${dir}`; }
   async apply() {
     this.plan.forEach(p=>{p.execution='';});
@@ -77,12 +79,12 @@ export class Controller {
       const adapter = this.adapter(c);
       for (const dir of ['upload','download']) {
         const key = this.managedKey(p.key,dir), target = adapter.quantize(p[dir]);
-        if (target == null) continue;
+        if (target == null && p.quick?.[dir]?.kind!=='unlimited') continue;
         valid.add(key);
-        if (!p.online || target <= 0) { blockIncrease = true; p.execution = target <= 0 ? '预算过小，拒绝写入零值':'失联，保留已分配额度'; continue; }
+        if (!p.online || target != null && target <= 0) { blockIncrease = true; p.execution = target != null && target <= 0 ? '预算过小，拒绝写入零值':'失联，保留已分配额度'; continue; }
         try {
           const current = p[dir === 'upload' ? 'currentUpload':'currentDownload'], record = owned[key];
-          if (record && (record.conflict || record.pending != null || !sameLimit(current,record.last))) {
+          if (record && (record.conflict || Object.hasOwn(record,'pending') || !sameLimit(current,record.last))) {
             if (!record.conflict) this.store.event('检测到外部限速修改',`${p.name}：已保留外部值并停止接管该方向。可在详情中重新接管。`,'warning');
             record.conflict = true; p.execution = '外部修改，已让出控制'; blockIncrease = true; continue;
           }
@@ -97,8 +99,8 @@ export class Controller {
       const live = liveByKey.get(record.key);
       if (!p?.online || live?.metadataReady === false || record.conflict) blockIncrease = true;
     }
-    const decreasing = tasks.filter(t=>t.current == null || t.target <= t.current);
-    const increasing = tasks.filter(t=>t.current != null && t.target > t.current);
+    const decreasing = tasks.filter(t=>t.target != null && (t.current == null || t.target <= t.current) || t.target == null && t.current == null);
+    const increasing = tasks.filter(t=>t.current != null && (t.target == null || t.target > t.current));
     const execute = async task => {
       const {key,p,dir,target,current,adapter,c,record} = task;
       try {
@@ -115,7 +117,7 @@ export class Controller {
         owned[key].last = confirmed; delete owned[key].pending; owned[key].time = Date.now();
         const rt = this.runtime.get(c.id)?.torrents.find(t=>String(t.id)===String(p.torrentId)); if (rt) rt[`${dir}Limit`] = confirmed;
         p.execution = '已回读确认';
-        this.store.event('限速已确认',`${p.name} · ${dir === 'upload' ? '上传':'下载'} ${Math.round(confirmed/1024)} KiB/s`, 'success',{code:'limit.confirmed',clientId:c.id,torrentId:p.torrentId,direction:dir,previous:current,target,confirmed});
+        this.store.event('限速已确认',`${p.name} · ${dir === 'upload' ? '上传':'下载'} ${confirmed==null?'不限速':Math.round(confirmed/1024)+' KiB/s'}`, 'success',{code:'limit.confirmed',clientId:c.id,torrentId:p.torrentId,direction:dir,previous:current,target,confirmed});
         this.store.set('managed',owned); return true;
       } catch(e) {
         p.execution = e.message; blockIncrease = true;
@@ -139,7 +141,7 @@ export class Controller {
   }
   async restoreRecord(key, record, owned, liveByKey) {
     const c = this.clients().find(c=>c.id===record.clientId), rt = this.runtime.get(record.clientId);
-    if (!c || !rt?.online || record.conflict || record.pending != null) return false;
+    if (!c || !rt?.online || record.conflict || Object.hasOwn(record,'pending')) return false;
     // A deleted torrent no longer has a setting to restore.
     const currentTorrent = liveByKey?.get(record.key) || (!liveByKey ? this.torrents().find(t=>t.key===record.key):null);
     if (!currentTorrent) { delete owned[key]; return true; }
@@ -166,6 +168,7 @@ export class Controller {
     this.busy = true;
     try {
       this.store.set('settings',{...this.store.get('settings'),controlEnabled:false});
+      if(activeRuns(this.store).length)this.quickActions.stop();
       const owned = this.store.get('managed',{}), prefix = `${this.store.get('settings').mode}|`;
       const liveByKey = new Map(this.torrents().map(t=>[t.key,t]));
       for (const [key,record] of Object.entries(owned).filter(([k])=>k.startsWith(prefix))) { await this.restoreRecord(key,record,owned,liveByKey); this.store.set('managed',owned); }

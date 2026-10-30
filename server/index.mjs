@@ -13,6 +13,7 @@ import { reorderRules } from './rule-order.mjs';
 import { validateIcon } from './site-icons.mjs';
 import { redact } from './logs.mjs';
 import { ReadModel } from './read-model.mjs';
+import { activeRuns, quickPolicy } from './quick-actions.mjs';
 
 const root = resolve(fileURLToPath(new URL('..',import.meta.url)));
 const appMeta=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
@@ -100,6 +101,7 @@ const server=http.createServer(async(req,res)=>{
       }
       if(!session(req)) fail('请先登录',401);
       if(method==='GET') {
+        if(path==='/api/quick-actions')return json(res,controller.quickActions.state());
         if(path==='/api/summary')return json(res,readModel.summary());
         if(path==='/api/workspace')return json(res,readModel.workspace());
         if(path==='/api/catalog')return json(res,readModel.catalog());
@@ -139,6 +141,17 @@ const server=http.createServer(async(req,res)=>{
       }
       const b=method==='POST'||method==='PUT' ? await body(req):{};
       if(controller.busy) fail('正在同步下载器，请稍后重试',409);
+      const quick=path.match(/^\/api\/quick-actions(?:\/([^/]+))?$/);
+      if(quick){
+        if(!b||typeof b!=='object'||Array.isArray(b))fail('一键操作请求需为对象');
+        const action=quick[1], manager=controller.quickActions;
+        if(method==='POST'&&action==='preview')return json(res,manager.preview(b));
+        if(method==='POST'&&action==='run')return json(res,manager.run(b),202);
+        if(method==='POST'&&action==='stop')return json(res,manager.stop(b.runId));
+        if((method==='POST'&&!action)||(method==='PUT'&&action))return json(res,manager.save(b,action));
+        if(method==='DELETE'&&action)return json(res,manager.remove(action,url.searchParams.get('revision')));
+        fail('不支持的一键操作请求',405);
+      }
       if(path==='/api/rules/order'&&method==='PUT') {
         let rules;try{rules=reorderRules(store.get('rules',[]),b);}catch(e){fail(e.message,e.status||400);}
         store.set('rules',rules);controller.lastControl=0;controller.replan();store.event('规则优先级已更新',`已排列 ${rules.length} 条规则`,'success',{code:'rules.reordered',ids:rules.map(r=>r.id)});return json(res,{ok:true});
@@ -146,6 +159,7 @@ const server=http.createServer(async(req,res)=>{
       if(path==='/api/settings'&&method==='PUT') {
         const old=store.get('settings'), mode=b.mode??old.mode;
         if(!['demo','real'].includes(mode)) fail('运行环境无效');
+        if(mode!==old.mode&&activeRuns(store).length)fail('切换环境前，请先停止当前一键效果');
         if(mode!==old.mode&&Object.values(store.get('managed',{})).some(m=>m.mode===old.mode)) fail('切换环境前，请先释放当前接管并恢复设置');
         const timezone=clean(b.timezone||old.timezone); try { new Intl.DateTimeFormat('en',{timeZone:timezone}).format(); } catch { fail('时区无效'); }
         const next={...old,mode,controlEnabled:mode!==old.mode ? false:Boolean(b.controlEnabled??old.controlEnabled),demandAware:Boolean(b.demandAware??old.demandAware??true),uploadBudget:limit(b.uploadBudget===undefined?old.uploadBudget:b.uploadBudget),downloadBudget:limit(b.downloadBudget===undefined?old.downloadBudget:b.downloadBudget),pollSeconds:number(Number(b.pollSeconds??old.pollSeconds),3,300,'同步间隔'),controlSeconds:number(Number(b.controlSeconds??old.controlSeconds),10,600,'调度间隔'),timezone};
@@ -165,6 +179,7 @@ const server=http.createServer(async(req,res)=>{
             if(store.get('rules',[]).some(r=>r.clients?.includes(id))) fail('请先修改引用该下载器的规则');
           }
           if(collection==='pools'&&store.get('rules',[]).some(r=>r.poolId===id)) fail('请先移除引用该池的规则');
+          if(collection==='pools'&&(store.get('quickActions',[]).some(a=>a.effects.some(e=>e.poolIds.includes(id)))||store.get('activeQuickActions',[]).some(a=>a.effects.some(e=>e.poolIds.includes(id)))))fail('请先移除引用该池的一键操作');
           const existing=store.get(collection,[]); if(!existing.some(x=>x.id===id)) fail('记录不存在',404);
           store.set(collection,existing.filter(x=>x.id!==id)); store.event('配置已删除',collection); controller.lastControl=0; return json(res,{ok:true});
         }
@@ -192,7 +207,7 @@ const server=http.createServer(async(req,res)=>{
         const {buildPlan}=await import('./engine.mjs');
         const rule={...ruleInput(b),id:b.id||'preview'};
         const rules=store.get('rules',[]).filter(r=>r.id!==b.id); rules.push(rule);
-        const plan=buildPlan(controller.torrents(),rules,store.get('pools',[]),store.get('settings'),store.get('overrides',{}));
+        const plan=buildPlan(controller.torrents(),rules,store.get('pools',[]),store.get('settings'),store.get('overrides',{}),new Date(),quickPolicy(activeRuns(store)));
         return json(res,{matches:plan.filter(p=>p.matchedRules.some(r=>r.id===rule.id)),total:plan.length});
       }
       if(path==='/api/labels'&&method==='PUT') {
@@ -208,7 +223,7 @@ const server=http.createServer(async(req,res)=>{
         }
         store.set('overrides',overrides); controller.lastControl=0; store.event(b.clear?'已取消临时设置':'临时设置已保存',`${keys.length} 个任务`); return json(res,{ok:true});
       }
-      if(path==='/api/export'&&method==='GET') return json(res,{app:'torrent-harbor',version:1,exported:new Date().toISOString(),settings:{...store.get('settings'),controlEnabled:false},pools:store.get('pools'),rules:store.get('rules'),clients:store.publicClients(),note:'不含连接密码、管理密码、应用标签和恢复基线；完整备份请保存整个 data 目录。'});
+      if(path==='/api/export'&&method==='GET') return json(res,{app:'torrent-harbor',version:1,exported:new Date().toISOString(),settings:{...store.get('settings'),controlEnabled:false},pools:store.get('pools'),rules:store.get('rules'),quickActions:store.get('quickActions',[]),clients:store.publicClients(),note:'不含连接密码、管理密码、应用标签和恢复基线；完整备份请保存整个 data 目录。'});
       fail('接口不存在',404);
     }
     if(!['GET','HEAD'].includes(method)) fail('不支持的请求方法',405);

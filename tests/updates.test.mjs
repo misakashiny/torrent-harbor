@@ -22,6 +22,7 @@ test('正式 Release 检查、确认、队列互斥、来源固定与恢复前�
     writeFileSync(join(root,'agent.json'),JSON.stringify({heartbeat:Date.now(),repository:state.repository,previousVersion:'1.0.0'}));
     store.set('settings',{controlEnabled:true});assert.throws(()=>manager.plan(),/释放接管/);store.set('settings',{controlEnabled:false});
     store.set('managed',{one:{last:1000}});assert.throws(()=>manager.plan(),/释放接管/);store.set('managed',{});
+    store.set('activeQuickActions',[{expires:null}]);assert.throws(()=>manager.plan(),/一键效果/);store.set('activeQuickActions',[]);
     const plan=manager.plan();assert.equal(plan.tag,'v1.1.0');assert.throws(()=>manager.queue('wrong'),/过期/);
     const queued=manager.queue(plan.id);const request=JSON.parse(readFileSync(join(root,'request.json')));assert.equal(request.id,queued.jobId);assert.equal(request.releaseId,42);assert.equal(manager.status().job.state,'queued');assert.throws(()=>manager.plan(),/正在执行/);assert.throws(()=>manager.configure({repository:'other/repo'}),/进行中/);
     writeFileSync(join(root,'status.json'),JSON.stringify({id:queued.jobId,state:'succeeded'}));const rollback=manager.plan('rollback');assert.equal(rollback.tag,'v1.0.0');assert.match(rollback.notes,/快照/);

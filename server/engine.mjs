@@ -43,7 +43,7 @@ export function allocate(items, budget) {
   return result;
 }
 const minCap = caps => { const f = caps.filter(v => v != null); return f.length ? Math.min(...f) : null; };
-export function buildPlan(torrents, rules, pools, settings, overrides = {}, now = new Date()) {
+export function buildPlan(torrents, rules, pools, settings, overrides = {}, now = new Date(), quickPolicy = {}) {
   const byKey = new Map(torrents.map(t=>[t.key,t]));
   const ordered = [...rules].sort((a,b) => a.priority-b.priority || a.id.localeCompare(b.id));
   const plan = torrents.map(t => {
@@ -52,10 +52,14 @@ export function buildPlan(torrents, rules, pools, settings, overrides = {}, now 
     const pool = matched.map(r => pools.find(p => p.id === r.poolId)).find(Boolean);
     return { key: t.key, clientId: t.clientId, torrentId: t.id, name: t.name, poolId: pool?.id || '', poolName: pool?.name || '单种规则', matchedRules: matched.map(r => ({ id:r.id, name:r.name })), managed: Boolean(matched.length || override), weight: override?.weight || Math.max(1, ...matched.map(r => r.weight || 1)), uploadCap: minCap([ ...matched.map(r => r.upload), override?.upload ]), downloadCap: minCap([ ...matched.map(r => r.download), override?.download ]), upload: null, download: null, currentUpload: t.uploadLimit, currentDownload: t.downloadLimit, online: t.online, state: t.state, override, reasons: [] };
   });
+  for(const p of plan){
+    const policy=quickPolicy[p.poolId];
+    if(policy){p.quick=policy;for(const dir of ['upload','download'])if(policy[dir])p[`${dir}Cap`]=policy[dir].kind==='per-torrent'?policy[dir].value:null;}
+  }
   for (const dir of ['upload','download']) {
     const demandCaps = new Map(plan.map(p => {
       const t = byKey.get(p.key);
-      if (!settings.demandAware || t[dir] == null) return [p.key,p[`${dir}Cap`]];
+      if (p.quick?.[dir] || !settings.demandAware || t[dir] == null) return [p.key,p[`${dir}Cap`]];
       const rate = Math.max(0,t[dir]), current = t[`${dir}Limit`];
       const idle = t.state === 'paused' || (dir === 'download' && t.progress >= 1);
       const probe = idle ? 16384:131072;
@@ -64,14 +68,15 @@ export function buildPlan(torrents, rules, pools, settings, overrides = {}, now 
       return [p.key,minCap([p[`${dir}Cap`],Math.floor(demand)])];
     }));
     const groups = new Map();
-    for (const p of plan.filter(p => p.managed)) {
+    for (const p of plan.filter(p => p.managed && p.quick?.[dir]?.kind!=='unlimited')) {
       const id = p.poolId || `single:${p.key}`;
       if (!groups.has(id)) groups.set(id, []); groups.get(id).push(p);
     }
     const groupItems = [...groups].map(([id, entries]) => {
       const pool = pools.find(p => p.id === id);
       const total = entries.every(e => demandCaps.get(e.key) != null) ? entries.reduce((s,e) => s + demandCaps.get(e.key), 0) : null;
-      return { id, weight: pool?.weight || 1, cap: minCap([pool?.[dir], total]) };
+      const quick=entries[0].quick?.[dir];
+      return { id, weight: pool?.weight || 1, cap: minCap([quick?(quick.kind==='shared'?quick.value:null):pool?.[dir], total]) };
     });
     const budgets = allocate(groupItems, settings[`${dir}Budget`]);
     for (const [id, entries] of groups) {
@@ -81,10 +86,11 @@ export function buildPlan(torrents, rules, pools, settings, overrides = {}, now 
   }
   for (const p of plan) {
     if (p.poolId) p.reasons.push(`主带宽池：${p.poolName}（多个池命中时按规则优先级选择一个）`);
-    if (p.uploadCap != null) p.reasons.push('上传同时受所有命中规则的单种上限约束');
-    if (p.downloadCap != null) p.reasons.push('下载同时受所有命中规则的单种上限约束');
-    if (p.override) p.reasons.push('临时设置有效，到期自动回到规则；临时设置不会放宽规则硬上限');
-    if (p.managed && settings.demandAware) p.reasons.push('按实测需求回收闲置份额，保留探测额度；持续贴近上限的任务会逐步获得更多额度');
+    if (p.uploadCap != null&&!p.quick?.upload) p.reasons.push('上传同时受所有命中规则的单种上限约束');
+    if (p.downloadCap != null&&!p.quick?.download) p.reasons.push('下载同时受所有命中规则的单种上限约束');
+    for(const dir of ['upload','download'])if(p.quick?.[dir]){const q=p.quick[dir];p.reasons.push(`一键操作「${q.name}」：${dir==='upload'?'上传':'下载'}${q.kind==='unlimited'?'解除本程序限制，不参与本程序预算；下载器总限速仍生效':q.kind==='shared'?'每站共享上限，仍受本程序总预算约束':'每个种子上限，仍受本程序总预算约束'}；${q.expires?new Date(q.expires).toISOString()+' 到期':'手动停止后恢复'}，同方向后执行优先`);}
+    if (p.override) p.reasons.push(p.quick?'任务临时设置仍保留；被一键效果覆盖的方向暂不采用该临时上限':'临时设置有效，到期自动回到规则；临时设置不会放宽规则硬上限');
+    if (p.managed && settings.demandAware) p.reasons.push(p.quick?'未被一键效果覆盖的方向继续按实测需求分配':'按实测需求回收闲置份额，保留探测额度；持续贴近上限的任务会逐步获得更多额度');
     if (!p.managed) p.reasons.push(byKey.get(p.key)?.metadataReady === false ? '完整 Tracker 元数据尚未就绪，暂不计算或接管，既有配额保留':'没有命中规则，保留原生设置，不计入受管带宽预算');
     if (p.managed && (p.upload === 0 || p.download === 0)) p.reasons.push('预算不足，不能写入零值冒充限速；本轮拒绝接管');
   }

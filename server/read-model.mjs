@@ -1,4 +1,5 @@
 import { ruleRevision } from './rule-order.mjs';
+import { activeRuns, quickRevision } from './quick-actions.mjs';
 
 const pageSizes = [25, 50, 100, 200, 300];
 const bad = message => { throw Object.assign(new Error(message), {status:400}); };
@@ -21,7 +22,8 @@ export class ReadModel {
     const ruleCounts={};
     for(const t of rows){const p=t.plan, v=poolStats[p?.poolId];if(v){v.count++;if(t.online&&!t.stale){v.upload+=t.upload;v.download+=t.download;}else v.offline++;if(t.updated)v.time=Math.min(v.time??Infinity,t.updated);v.allocated+=p?.upload||0;}for(const r of p?.matchedRules||[])ruleCounts[r.id]=(ruleCounts[r.id]||0)+1;}
     const owned=Object.values(s.get('managed',{})).filter(m=>m.mode===settings.mode);
-    const summary={version:this.version,settings,clients,pools,poolStats,ruleCounts,total:rows.length,active:clients.reduce((n,v)=>n+v.active,0),managedCount:owned.length,conflictCount:owned.filter(m=>m.conflict||m.pending!=null).length,matchedCount:rows.filter(t=>t.plan?.managed).length,blocked:c.plan.find(p=>p.execution?.includes('本轮限速计划未执行'))?.execution||'',history:s.history(settings.mode),topTorrents:[...rows].filter(t=>t.online).sort((a,b)=>b.upload+b.download-a.upload-a.download||a.key.localeCompare(b.key)).slice(0,5),syncing:c.busy,lastControl:c.lastControl,error:c.error,now};
+    const summary={version:this.version,settings,clients,pools,poolStats,ruleCounts,total:rows.length,active:clients.reduce((n,v)=>n+v.active,0),managedCount:owned.length,conflictCount:owned.filter(m=>m.conflict||Object.hasOwn(m,'pending')).length,matchedCount:rows.filter(t=>t.plan?.managed).length,blocked:c.plan.find(p=>p.execution?.includes('本轮限速计划未执行'))?.execution||'',history:s.history(settings.mode),topTorrents:[...rows].filter(t=>t.online).sort((a,b)=>b.upload+b.download-a.upload-a.download||a.key.localeCompare(b.key)).slice(0,5),syncing:c.busy,lastControl:c.lastControl,error:c.error,now};
+    summary.quickActions={revision:quickRevision(s.get('quickActions',[])),runs:activeRuns(s,now)};
     this.cached={stamp,rows,byKey,plans,summary,owned}; return this.cached;
   }
   summary(){return this.snapshot().summary;}

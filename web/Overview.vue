@@ -1,12 +1,13 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
 import ConnectionSummary from './ConnectionSummary.vue';
+import QuickActions from './QuickActions.vue';
 import { ArrowDown, ArrowUp, ChevronRight, AlertTriangle } from 'lucide-vue-next';
 import TrafficSummary from './TrafficSummary.vue';
 import SiteIcon from './SiteIcon.vue';
 import {poolStatus,poolRate} from './pool-status.mjs';
 const props=defineProps({data:Object,rules:Array,api:Function,format:Function,time:Function});
-const emit=defineEmits(['navigate','pool','detail']);
+const emit=defineEmits(['navigate','pool','detail','changed','notify']);
 const minutes=ref(5);
 const layoutQuery=window.matchMedia('(max-width: 1100px)');
 const stacked=ref(layoutQuery.matches);
@@ -36,6 +37,7 @@ const age=computed(()=>{const ts=props.data.clients.filter(c=>c.online&&c.time).
       <div class="rate-chart" role="img" :aria-label="`最近 ${minutes} 分钟实际采样速率；${history.length} 个采样点`"><div class="chart-labels"><span>{{format(max)}}</span><span>{{format(max/2)}}</span><span>0</span></div><div class="chart-plot"><div class="chart-grid"><i></i><i></i><i></i></div><svg viewBox="0 0 800 160" preserveAspectRatio="none" aria-hidden="true"><path :d="path('upload')" class="upload-line"/><path :d="path('download')" class="download-line"/></svg><p v-if="history.length<2" class="chart-empty">等待连续采样</p></div></div>
       <div class="chart-times"><span>{{time(data.now-minutes*60000,true)}}</span><span>{{time(data.now,true)}}</span></div>
       <div class="live-counts"><span>共 {{data.total.toLocaleString()}} 个种子</span><button @click="emit('navigate','torrents')">{{data.active}} 个正在传输<ChevronRight :size="14"/></button></div>
+      <QuickActions :api="api" :data="data" compact-bar @changed="emit('changed')" @notify="(text,error)=>emit('notify',text,error)" @manage="emit('navigate','quick')"/>
     </section>
     <ConnectionSummary v-if="!stacked" :clients="data.clients" :format="format" :time="time" @navigate="emit('navigate',$event)"/>
     </div>

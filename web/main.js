@@ -4,3 +4,5 @@ import './style.css';
 import './features.css';
 import './workspace.css';
 createApp(App).mount('#app');
+
+import './quick-actions.css';
