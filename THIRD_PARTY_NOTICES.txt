@@ -42,3 +42,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
+
+PT-depiler site icons: Copyright (c) 2020 pt-plugins. MIT License.
+Source: https://github.com/pt-plugins/PT-depiler/tree/d2e4baa782ceffd8cb7ab14df283f24c6252d9fd/public/icons/site
+Full license and source: web/public/site-icons/LICENSE.txt and SOURCE.txt (dist/site-icons in Docker).

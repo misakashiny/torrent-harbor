@@ -12,6 +12,7 @@ test('QB HTTP：SID 登录、全 Tracker 元数据、字节单位与写后回读
     if(req.headers.cookie!=='SID=mock-session'){res.writeHead(403);res.end();return;}
     if(u.pathname.endsWith('/torrents/info'))return send(res,[{hash:'abc',name:'test',progress:.5,size:1000,upspeed:100,dlspeed:200,up_limit:limits.upload,dl_limit:limits.download,tags:'电影, 保种',state:'downloading'}]);
     if(u.pathname.endsWith('/transfer/info'))return send(res,{up_info_speed:100,dl_info_speed:200,up_rate_limit:1000000,dl_rate_limit:0});
+    if(u.pathname.endsWith('/sync/maindata'))return send(res,{rid:1,full_update:true,server_state:{alltime_ul:9876543210,alltime_dl:1234567890}});
     if(u.pathname.endsWith('/app/version')){res.end('v5.0.0');return;}
     if(u.pathname.endsWith('/transfer/speedLimitsMode'))return send(res,1);
     if(u.pathname.endsWith('/torrents/trackers'))return send(res,[{url:'https://first.example/announce?passkey=secret'},{url:'https://second.example/announce'},{url:'DHT'}]);
@@ -32,7 +33,7 @@ for(const modern of [false,true])test(`TR HTTP：${modern?'JSON-RPC 2.0':'旧 RP
     let result={};
     if(method==='session-get')result={version:modern?'4.1.0':'4.0.6',units:modern?{speed_bytes:1000}:{'speed-bytes':1000}};
     if(method==='torrent-get'){Object.assign(row,state);const entries=Object.entries(row).map(([k,v])=>[modernRequest?toSnake(k):k,v]);result={torrents:[Object.fromEntries(entries)]};}
-    if(method==='session-stats')result=modernRequest?{upload_speed:100,download_speed:0}:{uploadSpeed:100,downloadSpeed:0};
+    if(method==='session-stats')result=modernRequest?{upload_speed:100,download_speed:0,cumulative_stats:{uploaded_bytes:9876543210,downloaded_bytes:1234567890}}:{uploadSpeed:100,downloadSpeed:0,'cumulative-stats':{uploadedBytes:9876543210,downloadedBytes:1234567890}};
     if(method==='torrent-set'){for(const k of Object.keys(state)){const key=modernRequest?toSnake(k):k;if(key in args)state[k]=args[key];}}
     return send(res,modernRequest?{jsonrpc:'2.0',id:1,result}:{result:'success',arguments:result});
   });

@@ -2,6 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes, scryptSync, timingSafeEqual, createCipheriv, createDecipheriv } from 'node:crypto';
+import { TrafficStore } from './traffic.mjs';
+import { LogStore, redact } from './logs.mjs';
 
 export class Store {
   constructor(directory) {
@@ -14,6 +16,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, time TEXT NOT NULL, level TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, time INTEGER NOT NULL, upload REAL NOT NULL, download REAL NOT NULL, mode TEXT NOT NULL);`);
+    this.traffic = new TrafficStore(this.db); this.logs = new LogStore(this.db);
     if (!this.get('settings')) this.seed();
     if (this.get('settings').demandAware === undefined) this.set('settings',{...this.get('settings'),demandAware:true});
   }
@@ -37,9 +40,12 @@ export class Store {
     const [salt, expected] = hash.split(':');
     return timingSafeEqual(scryptSync(value, salt, 64), Buffer.from(expected, 'hex'));
   }
-  event(title, detail = '', level = 'info') {
+  event(title, detail = '', level = 'info', context = {}) {
+    title=redact(title);detail=redact(detail);
     this.db.prepare('INSERT INTO events(time,level,title,detail) VALUES (?,?,?,?)').run(new Date().toISOString(), level, title, detail);
     this.db.prepare('DELETE FROM events WHERE id < (SELECT COALESCE(MAX(id),0)-2000 FROM events)').run();
+    const scope=/连接|下载器/.test(title)?'connection':/限速|接管|恢复|调度/.test(title)?'control':/配置|规则|设置|标签/.test(title)?'config':'system';
+    this.logs.write({level,scope,code:context.code||'event',message:title,context:{detail,...context}});
   }
   events() { return this.db.prepare('SELECT * FROM events ORDER BY id DESC LIMIT 150').all(); }
   sample(upload, download, mode) {

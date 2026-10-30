@@ -1,0 +1,4 @@
+Site icons from pt-plugins/PT-depiler
+https://github.com/pt-plugins/PT-depiler/tree/d2e4baa782ceffd8cb7ab14df283f24c6252d9fd/public/icons/site
+Copyright (c) 2020 pt-plugins. MIT license: LICENSE.txt
+Site marks belong to their respective owners.

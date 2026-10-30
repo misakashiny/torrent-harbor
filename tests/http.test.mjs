@@ -20,6 +20,14 @@ test('应用 HTTP 全流程：认证、配置、标签、接管恢复及重启�
     await t.test('更新接口需要身份验证并校验来源与安装条件',async()=>{assert.equal((await request('updates')).status,200);assert.equal((await request('updates/config','PUT',{repository:'invalid'})).status,422);assert.equal((await request('updates/plan','POST',{action:'update'})).status,422);});
     let state=(await request('state')).body;const key=state.torrents[0].key;
     await t.test('演示数据与真实环境隔离，状态包含可解释计划',async()=>{assert.equal(state.settings.mode,'demo');assert.equal(state.clients.length,3);assert.equal(state.torrents.length,36);assert.equal(state.managed.length,0);assert.ok(state.plan[0].matchedRules.length);});
+    await t.test('流量、日志与诊断需要登录，诊断无凭证，时段可切换',async()=>{
+      for(const range of ['1h','12h','24h','3d','7d','all']){const r=await request('traffic?range='+range);assert.equal(r.status,200);assert.equal(r.body.clients.length,3);assert.ok(r.body.upload>=0);}
+      assert.equal((await request('traffic?range=bad')).status,400);assert.ok((await request('logs')).body.total>0);assert.equal((await request('diagnostics')).body.version,state.version);
+    });
+    await t.test('拖动排序原子保存，旧页面的排序被拒绝且不改变规则',async()=>{
+      state=(await request('state')).body;const ids=[...state.rules].reverse().map(r=>r.id),payload={ids,revision:state.ruleRevision};
+      assert.equal((await request('rules/order','PUT',payload)).status,200);const updated=(await request('state')).body;assert.deepEqual(updated.rules.map(r=>r.id),ids);assert.deepEqual(updated.rules.map(r=>r.priority),[0,1,2,3]);assert.equal((await request('rules/order','PUT',payload)).status,409);
+    });
     await t.test('添加池与规则、预览命中、参数校验和引用保护',async()=>{
       const p=await request('pools','POST',{name:'测试池',upload:2000000,download:null,weight:1,color:'#123456'});assert.equal(p.status,200);
       const r={name:'测试规则',enabled:true,priority:1,poolId:p.body.id,tags:['测试标签'],hosts:[],upload:1000000,download:null,weight:1};

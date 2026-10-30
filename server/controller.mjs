@@ -1,6 +1,7 @@
 import { createAdapter } from './adapters.mjs';
 import { DemoAdapter } from './demo.mjs';
 import { buildPlan, sameLimit } from './engine.mjs';
+import { ruleRevision } from './rule-order.mjs';
 
 export class Controller {
   constructor(store) { this.store = store; this.adapters = new Map(); this.runtime = new Map(); this.results = new Map(); this.plan = []; this.lastControl = 0; this.lastSample = 0; this.busy = false; this.timer = null; this.error = ''; }
@@ -22,10 +23,12 @@ export class Controller {
         try {
           const snapshot = await this.adapter(c).snapshot();
           this.runtime.set(c.id,{...snapshot,online:true,time:Date.now(),error:''});
-          if (old && !old.online) this.store.event('下载器已重新连接',c.name,'success');
+          this.store.traffic?.record(this.store.get('settings').mode,c,snapshot.traffic,Date.now(),Math.max(60000,this.store.get('settings').pollSeconds*3000));
+          if (old && !old.online) this.store.event('下载器已重新连接',c.name,'success',{clientId:c.id,clientName:c.name,code:'client.reconnected'});
         } catch (e) {
           this.runtime.set(c.id,{...old,online:false,error:e.message,checked:Date.now()});
-          if (!old || old.online) this.store.event('下载器连接异常',`${c.name}：${e.message}`,'warning');
+          this.store.logs?.write({level:'error',scope:'connection',code:'client.snapshot_failed',message:'下载器同步失败',context:{clientId:c.id,clientName:c.name,error:e.message,stack:e.stack}});
+          if (!old || old.online) this.store.event('下载器连接异常',`${c.name}：${e.message}`,'warning',{clientId:c.id,clientName:c.name});
         }
       }));
       this.replan();
@@ -112,7 +115,7 @@ export class Controller {
         owned[key].last = confirmed; delete owned[key].pending; owned[key].time = Date.now();
         const rt = this.runtime.get(c.id)?.torrents.find(t=>String(t.id)===String(p.torrentId)); if (rt) rt[`${dir}Limit`] = confirmed;
         p.execution = '已回读确认';
-        this.store.event('限速已确认',`${p.name} · ${dir === 'upload' ? '上传':'下载'} ${Math.round(confirmed/1024)} KiB/s`, 'success');
+        this.store.event('限速已确认',`${p.name} · ${dir === 'upload' ? '上传':'下载'} ${Math.round(confirmed/1024)} KiB/s`, 'success',{code:'limit.confirmed',clientId:c.id,torrentId:p.torrentId,direction:dir,previous:current,target,confirmed});
         this.store.set('managed',owned); return true;
       } catch(e) {
         p.execution = e.message; blockIncrease = true;
@@ -121,7 +124,7 @@ export class Controller {
           owned[key].conflict = true;
           this.store.set('managed',owned);
         }
-        this.store.event('限速修改未确认',`${p.name}：${e.message}`,'warning'); return false;
+        this.store.event('限速修改未确认',`${p.name}：${e.message}`,'warning',{code:'limit.unconfirmed',clientId:c.id,torrentId:p.torrentId,direction:dir,previous:current,target,error:e.message}); return false;
       }
     };
     for (const task of decreasing) await execute(task);
@@ -192,7 +195,7 @@ export class Controller {
       return { id:c.id,name:c.name,type:c.type,demo:c.demo,online:!!rt.online,version:rt.version || '',upload:rt.online ? rt.upload:0,download:rt.online ? rt.download:0,torrentCount:rt.torrents?.length || 0,active:rt.torrents?.filter(t=>t.upload+t.download>0).length || 0,time:rt.time,error:rt.error || '',native:rt.native };
     });
     const managed = this.store.get('managed',{});
-    return { settings:this.store.get('settings'),clients,configuredClients:this.store.publicClients(),pools:this.store.get('pools',[]),rules:this.store.get('rules',[]),torrents:this.torrents(),plan:this.plan,managed:Object.values(managed).filter(m=>m.mode===this.store.get('settings').mode),history:this.store.history(this.store.get('settings').mode),events:this.store.events(),syncing:this.busy,lastControl:this.lastControl,error:this.error,now:Date.now() };
+    return { settings:this.store.get('settings'),clients,configuredClients:this.store.publicClients(),pools:this.store.get('pools',[]),rules:this.store.get('rules',[]),ruleRevision:ruleRevision(this.store.get('rules',[])),torrents:this.torrents(),plan:this.plan,managed:Object.values(managed).filter(m=>m.mode===this.store.get('settings').mode),history:this.store.history(this.store.get('settings').mode),events:this.store.events(),syncing:this.busy,lastControl:this.lastControl,error:this.error,now:Date.now() };
   }
   start() { const loop = async () => { await this.refresh(); this.timer = setTimeout(loop,this.store.get('settings').pollSeconds*1000); }; void loop(); }
   stop() { clearTimeout(this.timer); }

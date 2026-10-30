@@ -9,6 +9,9 @@ import { Controller } from './controller.mjs';
 import { createAdapter, validateUrl } from './adapters.mjs';
 import { MiB } from './engine.mjs';
 import { UpdateManager } from './updates.mjs';
+import { reorderRules } from './rule-order.mjs';
+import { validateIcon } from './site-icons.mjs';
+import { redact } from './logs.mjs';
 
 const root = resolve(fileURLToPath(new URL('..',import.meta.url)));
 const appMeta=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
@@ -94,6 +97,13 @@ const server=http.createServer(async(req,res)=>{
         failures.delete(address); return signin(res);
       }
       if(!session(req)) fail('请先登录',401);
+      if(path==='/api/traffic'&&method==='GET') {
+        try {return json(res,store.traffic.totals(store.get('settings').mode,controller.clients(),url.searchParams.get('range')||'1h',controller.runtime,Date.now(),Math.max(60000,store.get('settings').pollSeconds*3000)));}catch(e){fail(e.message);}
+      }
+      if(path==='/api/logs'&&method==='GET') {try{return json(res,store.logs.query(Object.fromEntries(url.searchParams)));}catch(e){fail(e.message);}}
+      if(path==='/api/diagnostics'&&method==='GET') {
+        const s=controller.state();return json(res,redact({app:'torrent-harbor',version:appMeta.version,exported:new Date().toISOString(),settings:s.settings,clients:s.clients.map(({id,name,type,online,version,error,native,time})=>({id,name,type,online,version,error,native,time})),rules:s.rules.length,pools:s.pools.length,managed:s.managed.length,logs:store.logs.query({...Object.fromEntries(url.searchParams),pageSize:200}).rows,note:'不含账号、连接地址、密码、Tracker 地址、种子名称和恢复基线；日志详情已隐藏凭证。'}));
+      }
       if(path==='/api/updates'&&method==='GET') return json(res,updates.status());
       if(path.startsWith('/api/updates/')&&method!=='GET') {
         const b=await body(req);
@@ -119,6 +129,10 @@ const server=http.createServer(async(req,res)=>{
       }
       const b=method==='POST'||method==='PUT' ? await body(req):{};
       if(controller.busy) fail('正在同步下载器，请稍后重试',409);
+      if(path==='/api/rules/order'&&method==='PUT') {
+        let rules;try{rules=reorderRules(store.get('rules',[]),b);}catch(e){fail(e.message,e.status||400);}
+        store.set('rules',rules);controller.lastControl=0;controller.replan();store.event('规则优先级已更新',`已排列 ${rules.length} 条规则`,'success',{code:'rules.reordered',ids:rules.map(r=>r.id)});return json(res,{ok:true});
+      }
       if(path==='/api/settings'&&method==='PUT') {
         const old=store.get('settings'), mode=b.mode??old.mode;
         if(!['demo','real'].includes(mode)) fail('运行环境无效');
@@ -155,7 +169,10 @@ const server=http.createServer(async(req,res)=>{
           if(old&&Object.values(store.get('managed',{})).some(m=>m.clientId===id)&&(old.url!==b.url||old.type!==b.type||b.enabled===false)) fail('更换地址、类型或停用前，请先释放接管');
           item={name:name(b.name),type:b.type,url:validateUrl(b.url),username:clean(b.username).slice(0,200),password:b.password ? store.seal(b.password):old?.password || '',demo:false,enabled:b.enabled!==false};
         }
-        if(collection==='pools') item={name:name(b.name),color:/^#[a-fA-F0-9]{6}$/.test(b.color)?b.color:'#218575',upload:limit(b.upload),download:limit(b.download),weight:number(Number(b.weight??1),1,100,'权重')};
+        if(collection==='pools') {
+          let icon;try{icon=validateIcon(b.icon??store.get('pools',[]).find(p=>p.id===id)?.icon??'auto');}catch(e){fail(e.message);}
+          item={name:name(b.name),icon,color:/^#[a-fA-F0-9]{6}$/.test(b.color)?b.color:'#218575',upload:limit(b.upload),download:limit(b.download),weight:number(Number(b.weight??1),1,100,'权重')};
+        }
         if(collection==='rules') item=ruleInput(b);
         const result=config(collection,item,id); store.event('配置已保存',item.name);
         if(collection==='clients') { const {password,...publicItem}=result; return json(res,{...publicItem,hasPassword:!!password}); }
@@ -189,15 +206,16 @@ const server=http.createServer(async(req,res)=>{
     let file=resolve(dist,`.${decodeURIComponent(path)}`);
     if(file!==dist&&!file.startsWith(`${dist}${sep}`)) fail('路径无效',403);
     try { if(!(await stat(file)).isFile()) file=join(dist,'index.html'); } catch { file=join(dist,'index.html'); }
-    const content=await readFile(file), mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png'}[extname(file)]||'application/octet-stream';
+    const content=await readFile(file), mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.webp':'image/webp','.jpg':'image/jpeg','.txt':'text/plain; charset=utf-8'}[extname(file)]||'application/octet-stream';
     res.writeHead(200,{'Content-Type':mime,'Cache-Control':extname(file)==='.html'?'no-cache':'public, max-age=86400'}); res.end(method==='HEAD'?undefined:content);
   } catch(e) {
+    if(!e.status||e.status>=500)store.logs.write({level:'error',scope:'http',code:'request.failed',message:'请求处理失败',context:{method:req.method,path:req.url?.split('?')[0],error:e.message,stack:e.stack}});
     if(!res.headersSent) json(res,{error:e.status?e.message:'操作未完成，请检查连接或服务记录'},e.status||500);
     else res.end();
   }
 });
 server.requestTimeout=30000;
 const port=Number(process.env.PORT||18977), host=process.env.HOST||'127.0.0.1';
-server.listen(port,host,()=>{console.log(`Torrent Harbor v${appMeta.version} · http://${host==='0.0.0.0'?'localhost':host}:${port}`); controller.start();updates.start();});
+server.listen(port,host,()=>{console.log(`Torrent Harbor v${appMeta.version} · http://${host==='0.0.0.0'?'localhost':host}:${port}`);store.logs.write({scope:'system',code:'app.started',message:'种子港已启动',context:{version:appMeta.version}}); controller.start();updates.start();});
 async function shutdown() { controller.stop();updates.stop(); server.close(); const until=Date.now()+12000; while(controller.busy&&Date.now()<until) await new Promise(r=>setTimeout(r,100)); store.close(); process.exit(0); }
 process.on('SIGTERM',shutdown); process.on('SIGINT',shutdown);

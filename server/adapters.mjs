@@ -28,6 +28,14 @@ export class QbAdapter {
   }
   async snapshot() {
     const [rows, transfer, version, alternative] = await Promise.all([this.call('torrents/info'), this.call('transfer/info'), this.call('app/version'), this.call('transfer/speedLimitsMode')]);
+    let traffic=null;
+    try {
+      const sync=await this.call(`sync/maindata?rid=${this.syncRid||0}`);
+      this.syncRid=sync.rid||0;this.serverState={...(sync.full_update?{}:this.serverState),...sync.server_state};
+      const {alltime_ul,alltime_dl}=this.serverState;
+      if(Number.isFinite(alltime_ul)&&Number.isFinite(alltime_dl))traffic={upload:alltime_ul,download:alltime_dl,lifetime:true,source:'qb-alltime'};
+    } catch { /* Counters are optional; losing statistics must not mark a working client offline. */ }
+    if(!traffic&&Number.isFinite(transfer.up_info_data)&&Number.isFinite(transfer.dl_info_data))traffic={upload:transfer.up_info_data,download:transfer.dl_info_data,lifetime:false,source:'qb-session'};
     if (!Array.isArray(rows)) throw new Error('QB 返回的种子列表格式异常');
     // Refresh in bounded batches. New torrents are not controlled before full tracker metadata is ready.
     const pending = rows.filter(t => !this.trackerCache.has(t.hash) || Date.now()-this.trackerCache.get(t.hash).time > 300000).slice(0,24);
@@ -38,7 +46,7 @@ export class QbAdapter {
       } catch { /* Retain metadata; a new torrent remains read-only until the next successful refresh. */ }
     }));
     const current = new Set(rows.map(t => t.hash)); for (const hash of this.trackerCache.keys()) if (!current.has(hash)) this.trackerCache.delete(hash);
-    return { version:String(version), upload:transfer.up_info_speed || 0, download:transfer.dl_info_speed || 0,
+    return { version:String(version), traffic, upload:transfer.up_info_speed || 0, download:transfer.dl_info_speed || 0,
       native: { upload:cap(transfer.up_rate_limit), download:cap(transfer.dl_rate_limit), alternative:Boolean(Number(alternative)), note:'原生全局、替代限速、协议与局域网设置仍会影响实测速度' },
       torrents: rows.map(t => ({ id:t.hash, hash:t.hash, name:t.name, progress:t.progress, size:t.size, uploaded:t.uploaded || 0, downloaded:t.downloaded || 0, ratio:t.ratio || 0, upload:t.upspeed || 0, download:t.dlspeed || 0, uploadLimit:cap(t.up_limit), downloadLimit:cap(t.dl_limit), tags:(t.tags || '').split(',').map(x => x.trim()).filter(Boolean), category:t.category || '', hosts:this.trackerCache.get(t.hash)?.hosts || [], metadataReady:this.trackerCache.has(t.hash), state:/paused|stopped/i.test(t.state) ? 'paused' : /stalled/i.test(t.state) ? 'stalled' : /error|missing/i.test(t.state) ? 'error' : t.progress >= 1 ? 'seeding':'downloading', nativeState:t.state })) };
   }
@@ -79,7 +87,9 @@ export class TrAdapter {
     const rows = response.torrents;
     if (!Array.isArray(rows)) throw new Error('TR 返回的种子列表格式异常');
     const alt = Boolean(pick(session,'alt-speed-enabled',false));
-    return { version, upload:pick(stats,'uploadSpeed',0), download:pick(stats,'downloadSpeed',0),
+    const cumulative=pick(stats,'cumulative-stats',{}), uploaded=pick(cumulative,'uploadedBytes'), downloaded=pick(cumulative,'downloadedBytes');
+    const traffic=Number.isFinite(uploaded)&&Number.isFinite(downloaded)?{upload:uploaded,download:downloaded,lifetime:true,source:'tr-cumulative'}:null;
+    return { version, traffic, upload:pick(stats,'uploadSpeed',0), download:pick(stats,'downloadSpeed',0),
       native: { upload:alt ? cap(pick(session,'alt-speed-up',0)*this.unit) : pick(session,'speed-limit-up-enabled',false) ? cap(pick(session,'speed-limit-up',0)*this.unit):null, download:alt ? cap(pick(session,'alt-speed-down',0)*this.unit) : pick(session,'speed-limit-down-enabled',false) ? cap(pick(session,'speed-limit-down',0)*this.unit):null, alternative:alt, minimumLimit:this.legacySpeedLimits?32768:this.unit, note:this.legacySpeedLimits?'旧版 TR 小额限速存在块粒度问题，按 32 KiB/s 向下保守分配；低于该值拒绝执行。原生全局与既有分组仍生效':'原生全局与既有带宽分组仍生效；本程序使用统一单种配额协调' },
       torrents:rows.map(t => ({ id:pick(t,'hashString') || pick(t,'id'), hash:pick(t,'hashString'), name:t.name, progress:pick(t,'percentDone',0), size:pick(t,'totalSize',0), uploaded:pick(t,'uploadedEver',0), downloaded:pick(t,'downloadedEver',0), ratio:pick(t,'uploadRatio',0), upload:pick(t,'rateUpload',0), download:pick(t,'rateDownload',0), uploadLimit:pick(t,'uploadLimited',false) ? Number(pick(t,'uploadLimit',0))*this.unit:null, downloadLimit:pick(t,'downloadLimited',false) ? Number(pick(t,'downloadLimit',0))*this.unit:null, tags:pick(t,'labels',[]), category:'', hosts:[...new Set((t.trackers || []).map(x => trackerHost(x.announce)).filter(Boolean))], metadataReady:true, state:t.error ? 'error' : t.status === 0 ? 'paused' : [1,2].includes(t.status) ? 'checking' : [3,4].includes(t.status) ? 'downloading' : 'seeding', nativeState:t.status, nativeGroup:t.group || '', honorsSessionLimits:pick(t,'honorsSessionLimits',true) })) };
   }
