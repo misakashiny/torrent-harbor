@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildPlan, MiB } from '../server/engine.mjs';
+const settings={timezone:'Asia/Shanghai',uploadBudget:10*MiB,downloadBudget:50*MiB,demandAware:true};
+const pool={id:'p',name:'池',upload:10*MiB,download:50*MiB,weight:1};
+const rule={id:'r',name:'规则',priority:1,enabled:true,poolId:'p',weight:1};
+const row=(id,extra={})=>({id,key:id,name:id,clientId:'qb',hosts:[],tags:[],state:'seeding',progress:1,online:true,metadataReady:true,upload:0,download:0,uploadLimit:null,downloadLimit:null,...extra});
+test('有需求的任务获得闲置成员让出的份额，池硬上限保持',()=>{const plan=buildPlan([row('active',{upload:7*MiB}),row('idle')],[rule],[pool],settings);assert.ok(plan[0].upload>9*MiB);assert.ok(plan[1].upload>0);assert.ok(plan.reduce((s,p)=>s+p.upload,0)<=10*MiB);});
+test('持续触顶任务通过探测逐轮增长，避免按低实测值锁死',()=>{let current=131072;for(let i=0;i<10;i++){const plan=buildPlan([row('a',{upload:current,uploadLimit:current})],[rule],[pool],settings);assert.ok(plan[0].upload>current||plan[0].upload===10*MiB);current=plan[0].upload;}assert.equal(current,10*MiB);});
+test('已完成的种子只保留下载探测额度，将下载预算让给未完成任务',()=>{const plan=buildPlan([row('complete'),row('download',{state:'downloading',progress:.3,download:40*MiB})],[rule],[pool],settings);assert.equal(plan[0].download,16384);assert.ok(plan[1].download>49*MiB);});
+test('一万个任务的计划仍满足总预算与唯一主池',()=>{const rows=Array.from({length:10000},(_,i)=>row(String(i),{upload:i%20===0?MiB:0}));const plan=buildPlan(rows,[rule],[pool],settings);assert.equal(plan.length,10000);assert.ok(plan.reduce((s,p)=>s+p.upload,0)<=10*MiB);assert.ok(plan.every(p=>p.poolId==='p'));});

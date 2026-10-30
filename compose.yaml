@@ -1,0 +1,29 @@
+services:
+  torrent-harbor:
+    build:
+      context: .
+    image: torrent-harbor:1.1.0-rc.1
+    container_name: torrent-harbor
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${HARBOR_PORT:-8787}:8787"
+    environment:
+      TZ: Asia/Shanghai
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    volumes:
+      - harbor-data:/app/data
+      - harbor-updates:/app/updates
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+
+volumes:
+  harbor-data:
+  harbor-updates:

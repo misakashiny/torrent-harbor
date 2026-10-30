@@ -1,0 +1,186 @@
+import { createAdapter } from './adapters.mjs';
+import { DemoAdapter } from './demo.mjs';
+import { buildPlan, sameLimit } from './engine.mjs';
+
+export class Controller {
+  constructor(store) { this.store = store; this.adapters = new Map(); this.runtime = new Map(); this.results = new Map(); this.plan = []; this.lastControl = 0; this.lastSample = 0; this.busy = false; this.timer = null; this.error = ''; }
+  clients() { const mode = this.store.get('settings').mode; return this.store.get('clients',[]).filter(c => c.enabled && Boolean(c.demo) === (mode === 'demo')); }
+  adapter(c) {
+    const signature = JSON.stringify(c), cached = this.adapters.get(c.id);
+    if (cached?.signature === signature) return cached.adapter;
+    const adapter = c.demo ? new DemoAdapter(c) : createAdapter(c,this.store.unseal(c.password));
+    if (c.demo) for (const rec of Object.values(this.store.get('managed',{})).filter(m=>m.clientId===c.id)) adapter.limits.set(rec.torrentId,{...(adapter.limits.get(rec.torrentId)||{upload:null,download:null}),[rec.direction]:rec.last});
+    this.adapters.set(c.id,{signature,adapter}); return adapter;
+  }
+  async refresh(control = true) {
+    if (this.busy) return false;
+    this.busy = true;
+    try {
+      const clients = this.clients();
+      for (let i=0;i<clients.length;i+=4) await Promise.all(clients.slice(i,i+4).map(async c => {
+        const old = this.runtime.get(c.id);
+        try {
+          const snapshot = await this.adapter(c).snapshot();
+          this.runtime.set(c.id,{...snapshot,online:true,time:Date.now(),error:''});
+          if (old && !old.online) this.store.event('下载器已重新连接',c.name,'success');
+        } catch (e) {
+          this.runtime.set(c.id,{...old,online:false,error:e.message,checked:Date.now()});
+          if (!old || old.online) this.store.event('下载器连接异常',`${c.name}：${e.message}`,'warning');
+        }
+      }));
+      this.replan();
+      const settings = this.store.get('settings');
+      if (control && settings.controlEnabled && Date.now()-this.lastControl >= settings.controlSeconds*1000) {
+        await this.apply(); this.lastControl = Date.now();
+      }
+      if (Date.now()-this.lastSample > 10000) {
+        const online = clients.map(c => this.runtime.get(c.id)).filter(s=>s?.online);
+        this.store.sample(online.reduce((s,c)=>s+c.upload,0),online.reduce((s,c)=>s+c.download,0),settings.mode); this.lastSample = Date.now();
+      }
+      this.error = '';
+    } catch (e) { this.error = e.message; this.store.event('调度轮次失败',e.message,'error'); }
+    finally { this.busy = false; }
+    return true;
+  }
+  torrents() {
+    const labels = this.store.get('labels',{});
+    return this.clients().flatMap(c => {
+      const rt = this.runtime.get(c.id); return (rt?.torrents || []).map(t => {
+        const key = `${c.id}:${c.type === 'tr' && !c.demo ? t.hash || t.id:t.id}`;
+        return {...t,key,clientId:c.id,clientName:c.name,clientType:c.type,demo:c.demo,online:Boolean(rt.online),updated:rt.time,nativeTags:t.tags,localTags:labels[key] || [],tags:[...new Set([...t.tags,...(labels[key] || [])])]};
+      });
+    });
+  }
+  replan() { this.plan = buildPlan(this.torrents(),this.store.get('rules',[]),this.store.get('pools',[]),this.store.get('settings'),this.store.get('overrides',{})).map(p=>({...p,execution:this.results.get(p.key)||''})); }
+  managedKey(key,dir) { return `${this.store.get('settings').mode}|${key}|${dir}`; }
+  async apply() {
+    const owned = this.store.get('managed',{}), mode = this.store.get('settings').mode, tasks = [], valid = new Set();
+    const liveByKey = new Map(this.torrents().map(t=>[t.key,t])), planByKey = new Map(this.plan.map(p=>[p.key,p]));
+    let blockIncrease = false;
+    for (const p of this.plan.filter(p=>p.managed)) {
+      const c = this.clients().find(c=>c.id===p.clientId); if (!c) continue;
+      const adapter = this.adapter(c);
+      for (const dir of ['upload','download']) {
+        const key = this.managedKey(p.key,dir), target = adapter.quantize(p[dir]);
+        if (target == null) continue;
+        valid.add(key);
+        if (!p.online || target <= 0) { blockIncrease = true; p.execution = target <= 0 ? '预算过小，拒绝写入零值':'失联，保留已分配额度'; continue; }
+        try {
+          const current = p[dir === 'upload' ? 'currentUpload':'currentDownload'], record = owned[key];
+          if (record && (record.conflict || record.pending != null || !sameLimit(current,record.last))) {
+            if (!record.conflict) this.store.event('检测到外部限速修改',`${p.name}：已保留外部值并停止接管该方向。可在详情中重新接管。`,'warning');
+            record.conflict = true; p.execution = '外部修改，已让出控制'; blockIncrease = true; continue;
+          }
+          if (!sameLimit(current,target) || !record) tasks.push({key,p,dir,target,current,adapter,c,record});
+        } catch (e) { blockIncrease = true; p.execution = e.message; }
+      }
+    }
+    // Existing reservations on offline / hidden clients must not be silently reused.
+    for (const [key,record] of Object.entries(owned).filter(([k])=>k.startsWith(`${mode}|`))) {
+      const p = planByKey.get(record.key);
+      const live = liveByKey.get(record.key);
+      if (!p?.online || live?.metadataReady === false || record.conflict) blockIncrease = true;
+    }
+    const decreasing = tasks.filter(t=>t.current == null || t.target <= t.current);
+    const increasing = tasks.filter(t=>t.current != null && t.target > t.current);
+    const execute = async task => {
+      const {key,p,dir,target,current,adapter,c,record} = task;
+      try {
+        // Check again immediately before writing; native APIs do not provide compare-and-set.
+        if (!sameLimit(await adapter.readLimit(p.torrentId,dir),current)) throw new Error('写入前值已变化，本轮跳过');
+        // Persist intent before I/O so a process crash cannot lose the baseline.
+        const baselineState=record?.baselineState || (!record && adapter.readLimitState ? await adapter.readLimitState(p.torrentId,dir):undefined);
+        if(!record && baselineState && !sameLimit(baselineState.value,current)) throw new Error('备份原始限速时设置已变化，本轮跳过');
+        owned[key] = {...record,mode,key:p.key,clientId:c.id,torrentId:p.torrentId,name:p.name,direction:dir,baseline:record ? record.baseline:current,baselineState,last:record ? record.last:current,pending:target,conflict:false};
+        this.store.set('managed',owned);
+        await adapter.setLimit(p.torrentId,dir,target);
+        const confirmed = await adapter.readLimit(p.torrentId,dir);
+        if (!sameLimit(confirmed,target)) throw new Error('下载器回读值与目标不符');
+        owned[key].last = confirmed; delete owned[key].pending; owned[key].time = Date.now();
+        const rt = this.runtime.get(c.id)?.torrents.find(t=>String(t.id)===String(p.torrentId)); if (rt) rt[`${dir}Limit`] = confirmed;
+        p.execution = '已回读确认';
+        this.store.event('限速已确认',`${p.name} · ${dir === 'upload' ? '上传':'下载'} ${Math.round(confirmed/1024)} KiB/s`, 'success');
+        this.store.set('managed',owned); return true;
+      } catch(e) {
+        p.execution = e.message; blockIncrease = true;
+        if (owned[key]) {
+          // A failed response can still mean the remote write succeeded. Freeze the intent.
+          owned[key].conflict = true;
+          this.store.set('managed',owned);
+        }
+        this.store.event('限速修改未确认',`${p.name}：${e.message}`,'warning'); return false;
+      }
+    };
+    for (const task of decreasing) await execute(task);
+    if (!blockIncrease) for (const task of increasing) { if (!await execute(task)) break; }
+    else increasing.forEach(t=>{t.p.execution='有失联、外部修改或未确认额度，暂缓提额';});
+    // Rules removed or expired: release only if the downloader still holds our last confirmed value.
+    for (const [key,record] of Object.entries(owned).filter(([k])=>k.startsWith(`${mode}|`) && !valid.has(k))) {
+      if (!await this.restoreRecord(key,record,owned,liveByKey)) blockIncrease = true;
+    }
+    this.store.set('managed',owned);
+    this.plan.forEach(p=>this.results.set(p.key,p.execution || ''));
+  }
+  async restoreRecord(key, record, owned, liveByKey) {
+    const c = this.clients().find(c=>c.id===record.clientId), rt = this.runtime.get(record.clientId);
+    if (!c || !rt?.online || record.conflict || record.pending != null) return false;
+    // A deleted torrent no longer has a setting to restore.
+    const currentTorrent = liveByKey?.get(record.key) || (!liveByKey ? this.torrents().find(t=>t.key===record.key):null);
+    if (!currentTorrent) { delete owned[key]; return true; }
+    if (currentTorrent.metadataReady === false) return false;
+    record.torrentId = currentTorrent.id;
+    const adapter = this.adapter(c);
+    try {
+      if (!sameLimit(await adapter.readLimit(record.torrentId,record.direction),record.last)) {
+        record.conflict = true; this.store.event('恢复已跳过',`${record.name} 的限速已被外部修改，保留当前设置`,'warning'); return false;
+      }
+      if(record.baselineState && adapter.restoreLimitState) await adapter.restoreLimitState(record.torrentId,record.direction,record.baselineState);
+      else await adapter.setLimit(record.torrentId,record.direction,record.baseline);
+      if (!sameLimit(await adapter.readLimit(record.torrentId,record.direction),record.baseline)) throw new Error('恢复值未确认');
+      if(record.baselineState && adapter.readLimitState) {
+        const restored=await adapter.readLimitState(record.torrentId,record.direction);
+        for(const field of Object.keys(record.baselineState)) if(restored[field]!==record.baselineState[field]) throw new Error('原始限速开关或保留值未完整恢复');
+      }
+      const torrent = rt.torrents.find(t=>String(t.id)===String(record.torrentId)); if (torrent) torrent[`${record.direction}Limit`] = record.baseline;
+      delete owned[key]; this.store.event('已恢复接管前设置',record.name,'success'); return true;
+    } catch(e) { this.store.event('恢复未完成',`${record.name}：${e.message}`,'warning'); return false; }
+  }
+  async release() {
+    if (this.busy) throw new Error('正在同步，请稍后再试');
+    this.busy = true;
+    try {
+      this.store.set('settings',{...this.store.get('settings'),controlEnabled:false});
+      const owned = this.store.get('managed',{}), prefix = `${this.store.get('settings').mode}|`;
+      const liveByKey = new Map(this.torrents().map(t=>[t.key,t]));
+      for (const [key,record] of Object.entries(owned).filter(([k])=>k.startsWith(prefix))) { await this.restoreRecord(key,record,owned,liveByKey); this.store.set('managed',owned); }
+      return { remaining:Object.keys(owned).filter(k=>k.startsWith(prefix)).length };
+    } finally { this.busy = false; }
+  }
+  async reclaim(key) {
+    if (this.busy) throw new Error('正在同步，请稍后再试');
+    this.busy = true;
+    try {
+    const owned = this.store.get('managed',{}), p = this.plan.find(p=>p.key===key);
+    if (!p?.online) throw new Error('请先连接该任务所属的下载器');
+    const c = this.clients().find(c=>c.id===p.clientId), adapter = this.adapter(c);
+    for (const dir of ['upload','download']) {
+      const k = this.managedKey(key,dir), rec = owned[k]; if (!rec) continue;
+      const current = await adapter.readLimit(p.torrentId,dir);
+      // Resolve an uncertain write by adopting the actual value, while retaining the original baseline.
+      rec.last = current; rec.conflict = false; delete rec.pending;
+    }
+    this.store.set('managed',owned); this.store.event('已重新接管任务',p.name);
+    } finally { this.busy = false; }
+  }
+  state() {
+    this.replan();
+    const clients = this.clients().map(c => {
+      const rt = this.runtime.get(c.id) || {};
+      return { id:c.id,name:c.name,type:c.type,demo:c.demo,online:!!rt.online,version:rt.version || '',upload:rt.online ? rt.upload:0,download:rt.online ? rt.download:0,torrentCount:rt.torrents?.length || 0,active:rt.torrents?.filter(t=>t.upload+t.download>0).length || 0,time:rt.time,error:rt.error || '',native:rt.native };
+    });
+    const managed = this.store.get('managed',{});
+    return { settings:this.store.get('settings'),clients,configuredClients:this.store.publicClients(),pools:this.store.get('pools',[]),rules:this.store.get('rules',[]),torrents:this.torrents(),plan:this.plan,managed:Object.values(managed).filter(m=>m.mode===this.store.get('settings').mode),history:this.store.history(this.store.get('settings').mode),events:this.store.events(),syncing:this.busy,lastControl:this.lastControl,error:this.error,now:Date.now() };
+  }
+  start() { const loop = async () => { await this.refresh(); this.timer = setTimeout(loop,this.store.get('settings').pollSeconds*1000); }; void loop(); }
+  stop() { clearTimeout(this.timer); }
+}

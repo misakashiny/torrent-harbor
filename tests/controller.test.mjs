@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Store } from '../server/store.mjs';
+import { Controller } from '../server/controller.mjs';
+const fixture=()=>{
+  const dir=mkdtempSync(join(tmpdir(),'harbor-control-')),s=new Store(dir);
+  s.set('settings',{mode:'real',controlEnabled:true,uploadBudget:100000,downloadBudget:null,timezone:'Asia/Shanghai',controlSeconds:10,pollSeconds:3});
+  const clients=[{id:'qb',name:'QB',type:'qb',url:'http://qb.invalid',enabled:true},{id:'tr',name:'TR',type:'tr',url:'http://tr.invalid',enabled:true}];s.set('clients',clients);
+  s.set('pools',[{id:'p',name:'共享池',upload:100000,download:null,weight:1}]);s.set('rules',[{id:'r',name:'规则',priority:1,enabled:true,hosts:['test.example'],poolId:'p',weight:1}]);
+  const c=new Controller(s),writes=[];
+  for(const client of clients){const limits={upload:null,download:null};const t={id:client.id,key:`${client.id}:${client.id}`,clientId:client.id,name:client.id,hosts:['test.example'],tags:[],state:'seeding',online:true,metadataReady:true,upload:0,download:0,uploadLimit:null,downloadLimit:null};
+    const adapter={limits,quantize:v=>v==null?null:Math.floor(v),snapshot:async()=>({torrents:[{...t,uploadLimit:limits.upload,downloadLimit:limits.download}],upload:0,download:0}),readLimit:async(id,dir)=>limits[dir],setLimit:async(id,dir,v)=>{writes.push({client:client.id,dir,v});limits[dir]=v;}};
+    c.adapters.set(client.id,{signature:JSON.stringify(client),adapter});
+  }
+  return {s,c,writes,adapter:id=>c.adapters.get(id).adapter,cleanup:()=>{s.close();rmSync(dir,{recursive:true,force:true});}};
+};
+test('共享额度在跨 QB/TR 写入后读回确认',async()=>{const f=fixture();try{await f.c.refresh();assert.equal(f.adapter('qb').limits.upload,50000);assert.equal(f.adapter('tr').limits.upload,50000);assert.equal(Object.keys(f.s.get('managed')).length,2);}finally{f.cleanup();}});
+test('份额转移先确认减额，再执行提额',async()=>{const f=fixture();try{await f.c.refresh();f.writes.length=0;f.s.set('overrides',{'tr:tr':{expires:Date.now()+100000,weight:3}});f.c.lastControl=0;await f.c.refresh();assert.equal(f.writes[0].client,'qb');assert.equal(f.writes[0].v,25000);assert.equal(f.writes[1].client,'tr');assert.equal(f.writes[1].v,75000);}finally{f.cleanup();}});
+test('减额失败时冻结不确定额度并阻止其他下载器提额',async()=>{const f=fixture();try{await f.c.refresh();f.writes.length=0;f.adapter('qb').setLimit=async()=>{throw new Error('模拟失败');};f.s.set('overrides',{'tr:tr':{expires:Date.now()+100000,weight:3}});f.c.lastControl=0;await f.c.refresh();assert.equal(f.adapter('tr').limits.upload,50000);assert.ok(f.s.get('managed')['real|qb:qb|upload'].conflict);}finally{f.cleanup();}});
+test('失联客户端保留预算，其他客户端不重复领取',async()=>{const f=fixture();try{await f.c.refresh();f.adapter('qb').snapshot=async()=>{throw new Error('离线');};f.s.set('overrides',{'tr:tr':{expires:Date.now()+100000,weight:3}});f.c.lastControl=0;await f.c.refresh();assert.equal(f.adapter('tr').limits.upload,50000);assert.equal(f.adapter('qb').limits.upload,50000);}finally{f.cleanup();}});
+test('人工修改被保留，释放时不覆盖；显式重新接管可解除冲突',async()=>{const f=fixture();try{await f.c.refresh();f.adapter('qb').limits.upload=12000;f.c.lastControl=0;await f.c.refresh();assert.equal(f.adapter('qb').limits.upload,12000);let result=await f.c.release();assert.equal(result.remaining,1);assert.equal(f.adapter('qb').limits.upload,12000);await f.c.reclaim('qb:qb');result=await f.c.release();assert.equal(result.remaining,0);assert.equal(f.adapter('qb').limits.upload,null);}finally{f.cleanup();}});
+test('停用全部规则时恢复最初原生设置',async()=>{const f=fixture();try{f.adapter('qb').limits.upload=33000;await f.c.refresh();f.s.set('rules',[]);f.c.lastControl=0;await f.c.refresh();assert.equal(f.adapter('qb').limits.upload,33000);assert.equal(f.adapter('tr').limits.upload,null);assert.equal(Object.keys(f.s.get('managed')).length,0);}finally{f.cleanup();}});
+test('仅预览刷新不会写入，暂停接管保留最后值',async()=>{const f=fixture();try{await f.c.refresh(false);assert.equal(f.writes.length,0);await f.c.refresh();f.s.set('settings',{...f.s.get('settings'),controlEnabled:false});f.s.set('rules',[]);await f.c.refresh();assert.equal(f.adapter('qb').limits.upload,50000);}finally{f.cleanup();}});
+test('完整元数据未就绪时保留旧配额，不恢复基线、不让其他任务提额',async()=>{const f=fixture();try{await f.c.refresh();const snapshot=f.adapter('qb').snapshot;f.adapter('qb').snapshot=async()=>{const s=await snapshot();s.torrents[0].metadataReady=false;return s;};f.c.lastControl=0;await f.c.refresh();assert.equal(f.adapter('qb').limits.upload,50000);assert.equal(f.adapter('tr').limits.upload,50000);assert.equal(Object.keys(f.s.get('managed')).length,2);}finally{f.cleanup();}});
+test('崩溃遗留的未确认写入保持冻结，要求显式重新接管',async()=>{const f=fixture();try{await f.c.refresh();const owned=f.s.get('managed');owned['real|qb:qb|upload'].pending=30000;f.s.set('managed',owned);f.c.lastControl=0;await f.c.refresh();assert.ok(f.s.get('managed')['real|qb:qb|upload'].conflict);assert.equal(f.adapter('qb').limits.upload,50000);}finally{f.cleanup();}});
+test('小于原生限速粒度的预算不会被写成 0（不限速）',async()=>{const f=fixture();try{f.adapter('tr').quantize=v=>v==null?null:Math.floor(v/1000)*1000;f.s.set('settings',{...f.s.get('settings'),uploadBudget:1000});await f.c.refresh();assert.ok(!f.writes.some(w=>w.v===0));}finally{f.cleanup();}});
+test('凭据加密、管理密码与恢复记录在重启后保持',()=>{const dir=mkdtempSync(join(tmpdir(),'harbor-store-'));let s=new Store(dir);try{const sealed=s.seal('not-a-real-password');assert.ok(!sealed.includes('not-a-real-password'));s.set('credentials',sealed);s.set('admin',s.password('administrator-test'));assert.ok(s.verify('administrator-test'));assert.ok(!s.verify('wrong'));s.set('managed',{baseline:123});s.close();s=new Store(dir);assert.equal(s.unseal(s.get('credentials')),'not-a-real-password');assert.deepEqual(s.get('managed'),{baseline:123});}finally{s.close();rmSync(dir,{recursive:true,force:true});}});
