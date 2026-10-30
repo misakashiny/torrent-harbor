@@ -95,7 +95,11 @@ class Updater:
         prefix=f'https://github.com/{self.repository}/releases/download/{tag}/'
         for a in [assets[expected],assets[expected+'.sha256']]:
             if not a['browser_download_url'].startswith(prefix):raise ValueError('Release asset does not belong to the pinned repository')
-        checksum=self.fetch_bytes(assets[expected+'.sha256']['browser_download_url'],4096).decode('ascii').split()[0].lower()
+        published=assets[expected].get('digest')
+        # GitHub computes this digest from the uploaded asset. Prefer the
+        # authenticated HTTPS API value so a cache hit needs no CDN round trip.
+        if isinstance(published,str) and re.fullmatch(r'sha256:[a-f0-9]{64}',published):checksum=published[7:]
+        else:checksum=self.fetch_bytes(assets[expected+'.sha256']['browser_download_url'],4096).decode('ascii').split()[0].lower()
         if not re.fullmatch(r'[a-f0-9]{64}',checksum):raise ValueError('Checksum file is invalid')
         size=assets[expected]['size']
         if not 0<size<350*1024*1024:raise ValueError('Release image size is outside the supported range')
@@ -124,7 +128,6 @@ class Updater:
                             if time.time()-last>1:self.status(job,'downloading','正在下载 GitHub 发布镜像',received=received,total=size);self.heartbeat();last=time.time()
                     if received!=size or digest.hexdigest()!=checksum:raise ValueError('安装包 SHA-256 校验失败')
                 self.retry_network(receive_image)
-            published=assets[expected].get('digest')
             if published and published!='sha256:'+checksum:raise ValueError('GitHub 摘要与校验文件不一致')
             self.status(job,'verifying','正在校验缓存镜像身份与架构' if cached else '正在校验镜像身份与架构',cacheUsed=cached)
             validate_image_archive(path if cached else temp,'torrent-harbor:'+version)

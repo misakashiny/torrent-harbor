@@ -44,12 +44,22 @@ class UpdaterTests(unittest.TestCase):
                 payload=json.dumps([{'RepoTags':['torrent-harbor:1.1.0']}]).encode();entry=tarfile.TarInfo('manifest.json');entry.size=len(payload);file.addfile(entry,io.BytesIO(payload))
             digest=hashlib.sha256(archive.read_bytes()).hexdigest();prefix='https://github.com/owner/repo/releases/download/v1.1.0/'
             release={'id':3,'tag_name':'v1.1.0','assets':[{'name':name,'size':archive.stat().st_size,'browser_download_url':prefix+name,'digest':'sha256:'+digest},{'name':name+'.sha256','browser_download_url':prefix+name+'.sha256'}]}
-            updater.fetch_bytes=lambda url,limit=0:json.dumps(release).encode() if 'api.github.com' in url else digest.encode()
+            def metadata(url,limit=0):
+                if 'api.github.com' not in url:raise AssertionError('Published API digest should avoid a checksum CDN request')
+                return json.dumps(release).encode()
+            updater.fetch_bytes=metadata
             class NoDownload:
                 def open(self,*args,**kwargs):raise AssertionError('Valid cached binary should not be downloaded again')
             updater.opener=NoDownload();architecture='arm64' if updater.platform.endswith('arm64') else 'amd64'
             command.side_effect=lambda args,**kwargs:json.dumps([{'Id':'verified','Architecture':architecture,'Os':'linux','Config':{'User':'node'}}]) if 'inspect' in args else ''
             self.assertEqual(updater.download({**self.job(),'releaseId':3})['image'],'verified')
+            release['assets'][0]['digest']='sha256:'+'0'*64
+            with self.assertRaises(AssertionError):updater.download({**self.job(),'releaseId':3})
+            release['assets'][0]['digest']='sha256:'+digest
+            release['assets'][0].pop('digest')
+            updater.fetch_bytes=lambda url,limit=0:json.dumps(release).encode() if 'api.github.com' in url else digest.encode()
+            self.assertEqual(updater.download({**self.job(),'releaseId':3})['image'],'verified')
+            release['assets'][0]['digest']='sha256:'+digest;updater.fetch_bytes=metadata
             archive.write_bytes(b'corrupt')
             with self.assertRaises(AssertionError):updater.download({**self.job(),'releaseId':3})
     @patch.object(mod,'command',return_value='')
