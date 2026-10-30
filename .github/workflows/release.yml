@@ -1,0 +1,66 @@
+name: Build Docker release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! gh release view "v$VERSION" >/dev/null 2>&1; then
+            FLAGS=()
+            if [[ "$VERSION" == *-* ]]; then FLAGS+=(--prerelease); fi
+            gh release create "v$VERSION" --title "Torrent Harbor v$VERSION" --generate-notes "${FLAGS[@]}"
+          fi
+  image:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify application
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work node:24-alpine sh -c 'npm ci --include=dev --no-audit --no-fund && npm run check'
+          python3 -m unittest discover -s tests -p '*_test.py'
+      - name: Build and export image
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          docker build -t "torrent-harbor:$VERSION" .
+          FILE="torrent-harbor-$VERSION-linux-$ARCHITECTURE.tar.gz"
+          docker image save "torrent-harbor:$VERSION" | gzip -1 > "$FILE"
+          sha256sum "$FILE" > "$FILE.sha256"
+      - name: Publish installation assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          FILE="torrent-harbor-$VERSION-linux-$ARCHITECTURE.tar.gz"
+          gh release upload "v$VERSION" "$FILE" "$FILE.sha256" --clobber

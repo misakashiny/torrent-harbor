@@ -2,7 +2,7 @@ services:
   torrent-harbor:
     build:
       context: .
-    image: torrent-harbor:1.1.0-rc.1
+    image: torrent-harbor:1.1.0
     container_name: torrent-harbor
     restart: unless-stopped
     init: true

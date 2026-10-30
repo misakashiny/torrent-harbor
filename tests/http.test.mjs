@@ -15,8 +15,9 @@ test('应用 HTTP 全流程：认证、配置、标签、接管恢复及重启�
   async function request(path,method='GET',payload,headers={},attempt=0){const res=await fetch(base+'/api/'+path,{method,headers:{Cookie:cookie,...(payload!==undefined?{'Content-Type':'application/json'}:{}),...headers},...(payload!==undefined?{body:JSON.stringify(payload)}:{})});const body=await res.json();if(res.status===409&&body.error?.startsWith('正在同步')&&attempt<30){await wait(40);return request(path,method,payload,headers,attempt+1);}const sid=res.headers.get('set-cookie');if(sid)cookie=sid.split(';')[0];return {status:res.status,body};}
   try{
     await start();
-    await t.test('未设置管理员时可见初始化状态，其他接口需认证',async()=>{assert.equal((await request('auth/status')).body.setup,true);assert.equal((await request('state')).status,401);});
+    await t.test('未设置管理员时可见初始化状态，其他接口需认证',async()=>{assert.equal((await request('auth/status')).body.setup,true);assert.equal((await request('state')).status,401);assert.equal((await request('updates')).status,401);});
     await t.test('拒绝跨站修改和弱密码，初始化只能执行一次',async()=>{assert.equal((await request('auth/setup','POST',{password:'test-password-strong'},{Origin:'http://evil.invalid'})).status,403);assert.equal((await request('auth/setup','POST',{password:'123'})).status,400);assert.equal((await request('auth/setup','POST',{password:'test-password-strong'})).status,200);assert.equal((await request('auth/setup','POST',{password:'other-password'})).status,409);});
+    await t.test('更新接口需要身份验证并校验来源与安装条件',async()=>{assert.equal((await request('updates')).status,200);assert.equal((await request('updates/config','PUT',{repository:'invalid'})).status,422);assert.equal((await request('updates/plan','POST',{action:'update'})).status,422);});
     let state=(await request('state')).body;const key=state.torrents[0].key;
     await t.test('演示数据与真实环境隔离，状态包含可解释计划',async()=>{assert.equal(state.settings.mode,'demo');assert.equal(state.clients.length,3);assert.equal(state.torrents.length,36);assert.equal(state.managed.length,0);assert.ok(state.plan[0].matchedRules.length);});
     await t.test('添加池与规则、预览命中、参数校验和引用保护',async()=>{

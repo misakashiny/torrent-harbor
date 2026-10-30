@@ -1,4 +1,4 @@
-Torrent Harbor 1.0.0 - bundled frontend dependency notices
+Torrent Harbor - bundled frontend dependency notices
 
 === vue ===
 The MIT License (MIT)
