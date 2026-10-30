@@ -505,6 +505,36 @@
         "No standalone external QUALITY BAR card; no backend/control or deployment acceptance claimed."
       ],
       "tonalRamps": "Generated OKLCH preview ramps; canonical values are the actual source colors, and ramp steps are not additional UI tokens."
+    },
+    "overviewLayout": {
+      "desktop": {
+        "columns": "minmax(0,1.7fr) minmax(290px,1fr)",
+        "gap": 20,
+        "primary": [
+          "realtime",
+          "connections"
+        ],
+        "secondary": [
+          "traffic-totals",
+          "pool-flow"
+        ],
+        "fullWidth": [
+          "active-tasks"
+        ]
+      },
+      "stacked": {
+        "maxWidth": 1100,
+        "order": [
+          "realtime",
+          "traffic-totals",
+          "pool-flow",
+          "connections",
+          "active-tasks"
+        ],
+        "phoneGap": 14
+      },
+      "preserveTrafficDisclosure": true,
+      "restoreConnectionFocus": true
     }
   },
   "components": [

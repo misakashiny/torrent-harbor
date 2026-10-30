@@ -2,7 +2,7 @@
 
 一个本地运行的 Docker 带宽控制台，把多个 qBittorrent 和 Transmission 放到同一页面，按 Tracker、标签和规则管理上传与下载。
 
-![深色主题下的演示工作空间](docs/screenshots/dashboard-1.3-dark.png)
+![深色主题下的演示工作空间](docs/screenshots/dashboard-1.3.1-dark.png)
 
 上图为独立演示数据。右上角可切换深色与浅色主题。手机以监控为主，底部可进入总览、种子、站点和记录；复杂配置与批量管理使用电脑。
 
