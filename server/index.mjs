@@ -26,7 +26,7 @@ const fail = (message,status=400) => { const e = new Error(message); e.status=st
 const json = (res,body,status=200,headers={}) => { res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}); res.end(JSON.stringify(body)); };
 const clean = value => String(value ?? '').trim();
 const name = value => { const v=clean(value); if (!v || v.length>100) fail('名称需为 1–100 个字符'); return v; };
-const list = value => { if (!Array.isArray(value) || value.length>100 || value.some(v=>typeof v!=='string'||v.length>200)) fail('条件列表格式不正确'); return [...new Set(value.map(v=>v.trim()).filter(Boolean))]; };
+const list = (value,max=100) => { if (!Array.isArray(value) || value.length>max || value.some(v=>typeof v!=='string'||v.length>200)) fail('条件列表格式不正确'); return [...new Set(value.map(v=>v.trim()).filter(Boolean))]; };
 const limit = value => { if (value===null || value==='' || value===undefined) return null; if (typeof value!=='number'||!Number.isFinite(value)||value<1024||value>1024**5) fail('限速必须至少为 1 KiB/s；不限速请留空'); return Math.floor(value); };
 const number = (v,min,max,label) => { if (!Number.isFinite(v)||v<min||v>max) fail(`${label}超出允许范围`); return v; };
 const password = v => { if (typeof v!=='string'||v.length<10||v.length>256) fail('管理密码需为 10–256 个字符'); return v; };
@@ -186,13 +186,13 @@ const server=http.createServer(async(req,res)=>{
         return json(res,{matches:plan.filter(p=>p.matchedRules.some(r=>r.id===rule.id)),total:plan.length});
       }
       if(path==='/api/labels'&&method==='PUT') {
-        const keys=list(b.keys||[]), tags=list(b.tags||[]); if(tags.some(t=>t.length>40)) fail('每个标签最多 40 字符');
-        const labels=store.get('labels',{}); keys.forEach(k=>{if(!controller.torrents().some(t=>t.key===k)) fail('任务不存在'); labels[k]=tags;}); store.set('labels',labels); controller.lastControl=0; return json(res,{ok:true});
+        const keys=list(b.keys||[],5000), tags=list(b.tags||[]); if(tags.some(t=>t.length>40)) fail('每个标签最多 40 字符');
+        const valid=new Set(controller.torrents().map(t=>t.key)),labels=store.get('labels',{}); keys.forEach(k=>{if(!valid.has(k)) fail('任务不存在'); labels[k]=tags;}); store.set('labels',labels); controller.lastControl=0; return json(res,{ok:true});
       }
       if(path==='/api/override'&&method==='POST') {
-        const keys=list(b.keys||[]), overrides=store.get('overrides',{});
+        const keys=list(b.keys||[],5000), overrides=store.get('overrides',{}),valid=new Set(controller.torrents().map(t=>t.key));
         for(const key of keys) {
-          if(!controller.torrents().some(t=>t.key===key)) fail('任务不存在');
+          if(!valid.has(key)) fail('任务不存在');
           if(b.clear) delete overrides[key];
           else overrides[key]={expires:Date.now()+number(Number(b.minutes??30),1,1440,'临时时长')*60000,upload:limit(b.upload),download:limit(b.download),weight:number(Number(b.weight??3),1,100,'临时权重')};
         }
