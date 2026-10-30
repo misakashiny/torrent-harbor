@@ -3,6 +3,7 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund --registry=https://registry.npmjs.org
 COPY web ./web
+COPY server/site-icons.json ./server/site-icons.json
 COPY vite.config.mjs ./
 RUN npm run build
 
