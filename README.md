@@ -39,11 +39,13 @@ docker compose up -d --build
 sudo python3 tools/install-updater.py --root "$(pwd)" --repository misakashiny/torrent-harbor
 ```
 
-执行器固定信任指定仓库，只处理种子港容器。网页容器以普通用户运行，不挂载 Docker socket。安装包使用 GitHub Release 中当前架构的 Docker 镜像归档和 SHA-256 校验文件。
+执行器固定信任指定仓库，只处理种子港容器。网页容器以普通用户运行，不挂载 Docker socket。安装包使用 GitHub Release 中当前架构的 Docker 镜像归档。优先使用 GitHub API 提供的 SHA-256 摘要，未提供时使用发布校验文件。
 
 在“版本更新”点击检查，释放限速接管后预览并确认安装。执行器先下载校验，再停应用备份数据、切换镜像和检查健康状态。安装失败会尝试恢复；服务中断后也会从事务记录恢复。回退会恢复上一个版本及其当时的数据快照，因此更新后的配置改动也会回退。重启应用后需要重新登录。
 
 支持 Linux amd64、arm64；具体版本是否可安装以 Release 中相应架构的附件为准。自动检查默认关闭；开启后每 6 小时检查一次，安装始终需要确认。未安装执行器时也可以下载 Release 镜像归档，使用 `docker image load -i 文件.tar.gz` 后修改 Compose 镜像标签并重建容器。
+
+已经安装旧执行器时，先等待当前版本任务结束，更新源码并重新运行安装脚本，再执行 `sudo systemctl restart torrent-harbor-updater` 使主机脚本生效。网页更新负责应用容器，主机执行器的修订请按发布说明处理。
 
 主机日志：`journalctl -u torrent-harbor-updater`。停止执行器：`sudo systemctl disable --now torrent-harbor-updater`。备份位于部署目录的 `backups/updates`，历史备份由主机管理员按需保留。
 
