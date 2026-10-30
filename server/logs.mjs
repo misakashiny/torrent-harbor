@@ -24,7 +24,7 @@ export class LogStore {
   }
   query({level='',scope='',q='',client='',from='',to='',page=1,pageSize=50}={}) {
     const where=[], args=[];
-    if(level){where.push('level=?');args.push(String(level));}if(scope){where.push('scope=?');args.push(String(scope));}
+    if(level==='attention')where.push("level IN ('warning','error')");else if(level){where.push('level=?');args.push(String(level));}if(scope){where.push('scope=?');args.push(String(scope));}
     if(q){where.push('(message LIKE ? ESCAPE \'\\\' OR context LIKE ? ESCAPE \'\\\' OR code LIKE ? ESCAPE \'\\\')');const s='%'+String(q).slice(0,200).replace(/[\\%_]/g,'\\$&')+'%';args.push(s,s,s);}
     if(client){where.push("json_extract(context,'$.clientId')=?");args.push(String(client));}
     for(const [v,op] of [[from,'>='],[to,'<=']])if(v){const t=Number(v);if(!Number.isFinite(t)||t<0)throw new Error('日志时间无效');where.push(`time${op}?`);args.push(t);}

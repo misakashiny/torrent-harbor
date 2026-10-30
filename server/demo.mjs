@@ -4,7 +4,7 @@ export class DemoAdapter {
   constructor(client) { this.client = client; this.limits = new Map(); }
   quantize(v) { return v == null ? null : Math.floor(v); }
   async snapshot() {
-    const index = ['demo-qb1','demo-tr1','demo-qb2'].indexOf(this.client.id), tick = Date.now()/10000;
+    const index = Math.max(0,['demo-qb1','demo-tr1','demo-qb2'].indexOf(this.client.id)), tick = Date.now()/10000;
     const torrents = Array.from({length:12},(_,i) => {
       const id = `demo-${index}-${i}`, site = ['north','orbit','forest'][(i+index)%3];
       const state = i < 3 && index !== 1 ? 'downloading' : i === 11 ? 'paused' : 'seeding';

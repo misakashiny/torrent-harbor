@@ -1,0 +1,632 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-30T14:03:09.597140+00:00",
+  "title": "Design System: 种子港 / Torrent Harbor",
+  "extensions": {
+    "colorMeta": {
+      "dark-bg": {
+        "role": "neutral",
+        "displayName": "深色 · 工作底色",
+        "canonical": "#0d0f12",
+        "cssProperty": "--bg",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0027 258.4)",
+          "oklch(26% 0.0046 258.4)",
+          "oklch(38% 0.0067 258.4)",
+          "oklch(49% 0.0071 258.4)",
+          "oklch(61% 0.0071 258.4)",
+          "oklch(72% 0.0066 258.4)",
+          "oklch(84% 0.0038 258.4)",
+          "oklch(95% 0.0012 258.4)"
+        ]
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "深色 · 面板色",
+        "canonical": "#15181d",
+        "cssProperty": "--surface",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0041 260.7)",
+          "oklch(26% 0.0071 260.7)",
+          "oklch(38% 0.0104 260.7)",
+          "oklch(49% 0.0110 260.7)",
+          "oklch(61% 0.0110 260.7)",
+          "oklch(72% 0.0102 260.7)",
+          "oklch(84% 0.0058 260.7)",
+          "oklch(95% 0.0018 260.7)"
+        ]
+      },
+      "dark-raised": {
+        "role": "neutral",
+        "displayName": "深色 · 抬升色",
+        "canonical": "#1c2026",
+        "cssProperty": "--raised",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0049 258.4)",
+          "oklch(26% 0.0084 258.4)",
+          "oklch(38% 0.0123 258.4)",
+          "oklch(49% 0.0129 258.4)",
+          "oklch(61% 0.0129 258.4)",
+          "oklch(72% 0.0121 258.4)",
+          "oklch(84% 0.0069 258.4)",
+          "oklch(95% 0.0022 258.4)"
+        ]
+      },
+      "dark-text": {
+        "role": "neutral",
+        "displayName": "深色 · 主文字",
+        "canonical": "#edf0f4",
+        "cssProperty": "--text",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0023 255.5)",
+          "oklch(26% 0.0041 255.5)",
+          "oklch(38% 0.0059 255.5)",
+          "oklch(49% 0.0063 255.5)",
+          "oklch(61% 0.0063 255.5)",
+          "oklch(72% 0.0058 255.5)",
+          "oklch(84% 0.0033 255.5)",
+          "oklch(95% 0.0010 255.5)"
+        ]
+      },
+      "dark-muted": {
+        "role": "neutral",
+        "displayName": "深色 · 次文字",
+        "canonical": "#a0a8b4",
+        "cssProperty": "--muted",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0073 258.4)",
+          "oklch(26% 0.0127 258.4)",
+          "oklch(38% 0.0186 258.4)",
+          "oklch(49% 0.0196 258.4)",
+          "oklch(61% 0.0196 258.4)",
+          "oklch(72% 0.0183 258.4)",
+          "oklch(84% 0.0104 258.4)",
+          "oklch(95% 0.0033 258.4)"
+        ]
+      },
+      "dark-line": {
+        "role": "neutral",
+        "displayName": "深色 · 分隔线",
+        "canonical": "#2c323b",
+        "cssProperty": "--line",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0068 258.4)",
+          "oklch(26% 0.0118 258.4)",
+          "oklch(38% 0.0173 258.4)",
+          "oklch(49% 0.0182 258.4)",
+          "oklch(61% 0.0182 258.4)",
+          "oklch(72% 0.0170 258.4)",
+          "oklch(84% 0.0097 258.4)",
+          "oklch(95% 0.0030 258.4)"
+        ]
+      },
+      "dark-blue": {
+        "role": "primary",
+        "displayName": "深色 · 数据蓝",
+        "canonical": "#79afff",
+        "cssProperty": "--blue / --down",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0486 258.0)",
+          "oklch(26% 0.0842 258.0)",
+          "oklch(38% 0.1231 258.0)",
+          "oklch(49% 0.1296 258.0)",
+          "oklch(61% 0.1296 258.0)",
+          "oklch(72% 0.1209 258.0)",
+          "oklch(84% 0.0691 258.0)",
+          "oklch(95% 0.0216 258.0)"
+        ]
+      },
+      "dark-up": {
+        "role": "neutral",
+        "displayName": "深色 · 上传灰",
+        "canonical": "#aeb9c7",
+        "cssProperty": "--up",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0088 254.4)",
+          "oklch(26% 0.0152 254.4)",
+          "oklch(38% 0.0222 254.4)",
+          "oklch(49% 0.0234 254.4)",
+          "oklch(61% 0.0234 254.4)",
+          "oklch(72% 0.0218 254.4)",
+          "oklch(84% 0.0125 254.4)",
+          "oklch(95% 0.0039 254.4)"
+        ]
+      },
+      "dark-positive": {
+        "role": "semantic",
+        "displayName": "深色 · 正向状态",
+        "canonical": "#78b7a5",
+        "cssProperty": "--green",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0263 174.3)",
+          "oklch(26% 0.0456 174.3)",
+          "oklch(38% 0.0667 174.3)",
+          "oklch(49% 0.0702 174.3)",
+          "oklch(61% 0.0702 174.3)",
+          "oklch(72% 0.0655 174.3)",
+          "oklch(84% 0.0374 174.3)",
+          "oklch(95% 0.0117 174.3)"
+        ]
+      },
+      "dark-warning": {
+        "role": "semantic",
+        "displayName": "深色 · 提醒",
+        "canonical": "#e6b778",
+        "cssProperty": "--warn",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0364 73.9)",
+          "oklch(26% 0.0630 73.9)",
+          "oklch(38% 0.0921 73.9)",
+          "oklch(49% 0.0970 73.9)",
+          "oklch(61% 0.0970 73.9)",
+          "oklch(72% 0.0905 73.9)",
+          "oklch(84% 0.0517 73.9)",
+          "oklch(95% 0.0162 73.9)"
+        ]
+      },
+      "dark-danger": {
+        "role": "semantic",
+        "displayName": "深色 · 危险",
+        "canonical": "#f39595",
+        "cssProperty": "--danger",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0426 20.0)",
+          "oklch(26% 0.0739 20.0)",
+          "oklch(38% 0.1080 20.0)",
+          "oklch(49% 0.1137 20.0)",
+          "oklch(61% 0.1137 20.0)",
+          "oklch(72% 0.1061 20.0)",
+          "oklch(84% 0.0606 20.0)",
+          "oklch(95% 0.0189 20.0)"
+        ]
+      },
+      "light-bg": {
+        "role": "neutral",
+        "displayName": "浅色 · 工作底色",
+        "canonical": "#f4f5f7",
+        "cssProperty": "--bg",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0011 264.5)",
+          "oklch(26% 0.0019 264.5)",
+          "oklch(38% 0.0027 264.5)",
+          "oklch(49% 0.0029 264.5)",
+          "oklch(61% 0.0029 264.5)",
+          "oklch(72% 0.0027 264.5)",
+          "oklch(84% 0.0015 264.5)",
+          "oklch(95% 0.0005 264.5)"
+        ]
+      },
+      "light-surface": {
+        "role": "neutral",
+        "displayName": "浅色 · 面板色",
+        "canonical": "#ffffff",
+        "cssProperty": "--surface",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.9)",
+          "oklch(26% 0.0000 89.9)",
+          "oklch(38% 0.0000 89.9)",
+          "oklch(49% 0.0000 89.9)",
+          "oklch(61% 0.0000 89.9)",
+          "oklch(72% 0.0000 89.9)",
+          "oklch(84% 0.0000 89.9)",
+          "oklch(95% 0.0000 89.9)"
+        ]
+      },
+      "light-raised": {
+        "role": "neutral",
+        "displayName": "浅色 · 抬升色",
+        "canonical": "#eaedf1",
+        "cssProperty": "--raised",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0024 255.5)",
+          "oklch(26% 0.0041 255.5)",
+          "oklch(38% 0.0060 255.5)",
+          "oklch(49% 0.0063 255.5)",
+          "oklch(61% 0.0063 255.5)",
+          "oklch(72% 0.0059 255.5)",
+          "oklch(84% 0.0033 255.5)",
+          "oklch(95% 0.0010 255.5)"
+        ]
+      },
+      "light-text": {
+        "role": "neutral",
+        "displayName": "浅色 · 主文字",
+        "canonical": "#202630",
+        "cssProperty": "--text",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0077 260.6)",
+          "oklch(26% 0.0134 260.6)",
+          "oklch(38% 0.0196 260.6)",
+          "oklch(49% 0.0206 260.6)",
+          "oklch(61% 0.0206 260.6)",
+          "oklch(72% 0.0193 260.6)",
+          "oklch(84% 0.0110 260.6)",
+          "oklch(95% 0.0034 260.6)"
+        ]
+      },
+      "light-muted": {
+        "role": "neutral",
+        "displayName": "浅色 · 次文字",
+        "canonical": "#566171",
+        "cssProperty": "--muted",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0109 257.7)",
+          "oklch(26% 0.0189 257.7)",
+          "oklch(38% 0.0277 257.7)",
+          "oklch(49% 0.0291 257.7)",
+          "oklch(61% 0.0291 257.7)",
+          "oklch(72% 0.0272 257.7)",
+          "oklch(84% 0.0155 257.7)",
+          "oklch(95% 0.0049 257.7)"
+        ]
+      },
+      "light-line": {
+        "role": "neutral",
+        "displayName": "浅色 · 分隔线",
+        "canonical": "#d7dce3",
+        "cssProperty": "--line",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0041 256.7)",
+          "oklch(26% 0.0072 256.7)",
+          "oklch(38% 0.0105 256.7)",
+          "oklch(49% 0.0110 256.7)",
+          "oklch(61% 0.0110 256.7)",
+          "oklch(72% 0.0103 256.7)",
+          "oklch(84% 0.0059 256.7)",
+          "oklch(95% 0.0018 256.7)"
+        ]
+      },
+      "light-blue": {
+        "role": "primary",
+        "displayName": "浅色 · 数据蓝",
+        "canonical": "#2568c2",
+        "cssProperty": "--blue / --down",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0585 257.2)",
+          "oklch(26% 0.1014 257.2)",
+          "oklch(38% 0.1482 257.2)",
+          "oklch(49% 0.1560 257.2)",
+          "oklch(61% 0.1560 257.2)",
+          "oklch(72% 0.1456 257.2)",
+          "oklch(84% 0.0832 257.2)",
+          "oklch(95% 0.0260 257.2)"
+        ]
+      },
+      "light-up": {
+        "role": "neutral",
+        "displayName": "浅色 · 上传灰",
+        "canonical": "#59697f",
+        "cssProperty": "--up",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0150 256.4)",
+          "oklch(26% 0.0260 256.4)",
+          "oklch(38% 0.0380 256.4)",
+          "oklch(49% 0.0400 256.4)",
+          "oklch(61% 0.0400 256.4)",
+          "oklch(72% 0.0374 256.4)",
+          "oklch(84% 0.0214 256.4)",
+          "oklch(95% 0.0067 256.4)"
+        ]
+      },
+      "light-positive": {
+        "role": "semantic",
+        "displayName": "浅色 · 正向状态",
+        "canonical": "#347560",
+        "cssProperty": "--green",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0282 169.5)",
+          "oklch(26% 0.0489 169.5)",
+          "oklch(38% 0.0714 169.5)",
+          "oklch(49% 0.0752 169.5)",
+          "oklch(61% 0.0752 169.5)",
+          "oklch(72% 0.0702 169.5)",
+          "oklch(84% 0.0401 169.5)",
+          "oklch(95% 0.0125 169.5)"
+        ]
+      },
+      "light-warning": {
+        "role": "semantic",
+        "displayName": "浅色 · 提醒",
+        "canonical": "#8a5c20",
+        "cssProperty": "--warn",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0358 69.4)",
+          "oklch(26% 0.0621 69.4)",
+          "oklch(38% 0.0907 69.4)",
+          "oklch(49% 0.0955 69.4)",
+          "oklch(61% 0.0955 69.4)",
+          "oklch(72% 0.0891 69.4)",
+          "oklch(84% 0.0509 69.4)",
+          "oklch(95% 0.0159 69.4)"
+        ]
+      },
+      "light-danger": {
+        "role": "semantic",
+        "displayName": "浅色 · 危险",
+        "canonical": "#b92e3f",
+        "cssProperty": "--danger",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0654 19.3)",
+          "oklch(26% 0.1134 19.3)",
+          "oklch(38% 0.1658 19.3)",
+          "oklch(49% 0.1745 19.3)",
+          "oklch(61% 0.1745 19.3)",
+          "oklch(72% 0.1629 19.3)",
+          "oklch(84% 0.0931 19.3)",
+          "oklch(95% 0.0291 19.3)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "页面标题",
+        "purpose": "桌面24px，手机22px；不是装饰展示字。"
+      },
+      "body": {
+        "displayName": "中文系统正文",
+        "purpose": "系统字体用于操作界面；数字字段启用tabular-nums。"
+      },
+      "rate": {
+        "displayName": "实时速率",
+        "purpose": "桌面30px；手机clamp(20px,6.15vw,24px)。"
+      },
+      "diagnostic": {
+        "displayName": "诊断原文",
+        "purpose": "日志详情等宽字体。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "modal",
+        "value": "0 16px 60px #0005",
+        "purpose": "桌面弹窗。"
+      },
+      {
+        "name": "mobile-sheet",
+        "value": "0 -8px 40px #0004",
+        "purpose": "手机底部详情或对话框。"
+      },
+      {
+        "name": "toast",
+        "value": "0 8px 30px #0004",
+        "purpose": "临时提示消息。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-background",
+        "value": "background .15s",
+        "purpose": "保留按钮等常规背景切换。"
+      },
+      {
+        "name": "mobile-drawer",
+        "value": "transform .2s ease",
+        "purpose": "手机侧栏进入与退出。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}",
+        "purpose": "用户减少动态效果时全局关闭动画与过渡。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone-max",
+        "value": "760px"
+      },
+      {
+        "name": "collapsed-rail-min",
+        "value": "761px"
+      },
+      {
+        "name": "collapsed-rail-max",
+        "value": "1100px"
+      }
+    ],
+    "focus": [
+      {
+        "name": "control-focus",
+        "value": "2px solid var(--blue); outline-offset:3px",
+        "purpose": "通用按钮、链接和summary的可见焦点。"
+      },
+      {
+        "name": "input-focus",
+        "value": "2px solid var(--blue); outline-offset:1px",
+        "purpose": "输入和选择器焦点；保留专用组件可能有更具体规则。"
+      }
+    ],
+    "layout": {
+      "desktopSidebar": "222px",
+      "collapsedSidebar": "78px",
+      "phoneDrawer": "250px",
+      "mainMaxWidth": "1560px",
+      "desktopTopbar": "62px",
+      "phoneTopbar": "58px",
+      "phoneContentBottom": "calc(84px + env(safe-area-inset-bottom))",
+      "phoneTabs": [
+        "总览",
+        "种子",
+        "站点",
+        "记录"
+      ]
+    },
+    "sources": [
+      "web/main.js",
+      "web/workspace.css",
+      "web/style.css",
+      "web/features.css",
+      "web/App.vue",
+      "web/Overview.vue",
+      "web/MobileMonitor.vue",
+      "web/TrafficSummary.vue",
+      "web/Logs.vue",
+      "web/Updates.vue",
+      "web/format.mjs",
+      "web/pool-status.mjs",
+      "web/SiteIcon.vue"
+    ],
+    "evidence": {
+      "kind": "source-derived implemented system",
+      "rendered": [
+        ".impeccable/review/desktop.png",
+        ".impeccable/review/mobile.png"
+      ],
+      "review": [
+        ".impeccable/review/finish-review.txt",
+        ".impeccable/review/finish-verdict.txt"
+      ],
+      "limitations": [
+        "Synthetic isolated data and browser viewport simulations.",
+        "No physical-phone acceptance.",
+        "The follow-up ship verdict resolves two findings; the preceding full review retains whole-surface scope.",
+        "Some supporting light-theme and records-page captures predate the final fix batch.",
+        "No standalone external QUALITY BAR card; no backend/control or deployment acceptance claimed."
+      ],
+      "tonalRamps": "Generated OKLCH preview ramps; canonical values are the actual source colors, and ramp steps are not additional UI tokens."
+    }
+  },
+  "components": [
+    {
+      "name": "主要操作",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "反转前景与工作底色；保存等主要桌面操作。",
+      "html": "<button class=\"ds-button ds-primary\">保存</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;border-radius:7px;padding:8px 12px;cursor:pointer;transition:background .15s;font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-size:13px;font-weight:500;line-height:1.5;}.ds-button:disabled{opacity:.5;cursor:not-allowed}.ds-button:focus-visible{outline:2px solid var(--blue,#79afff);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-primary{background:var(--text,#edf0f4);color:var(--bg,#0d0f12);border:1px solid transparent}.ds-primary:hover:not(:disabled){background:var(--muted,#a0a8b4)}.ds-primary:active:not(:disabled){background:var(--muted,#a0a8b4)}"
+    },
+    {
+      "name": "次要操作",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "面板底与细边框；刷新、取消等常规操作。",
+      "html": "<button class=\"ds-button ds-secondary\">取消</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;border-radius:7px;padding:8px 12px;cursor:pointer;transition:background .15s;font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-size:13px;font-weight:500;line-height:1.5;}.ds-button:disabled{opacity:.5;cursor:not-allowed}.ds-button:focus-visible{outline:2px solid var(--blue,#79afff);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-secondary{background:var(--surface,#15181d);color:var(--text,#edf0f4);border:1px solid var(--line,#2c323b)}.ds-secondary:hover:not(:disabled){background:var(--raised,#1c2026);border-color:var(--muted,#a0a8b4)}.ds-secondary:active:not(:disabled){background:var(--raised,#1c2026)}"
+    },
+    {
+      "name": "危险操作",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "使用语义危险色；确认层与文案仍由原流程提供。",
+      "html": "<button class=\"ds-button ds-danger\">移除</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;border-radius:7px;padding:8px 12px;cursor:pointer;transition:background .15s;font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-size:13px;font-weight:500;line-height:1.5;}.ds-button:disabled{opacity:.5;cursor:not-allowed}.ds-button:focus-visible{outline:2px solid var(--blue,#79afff);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-danger{background:var(--danger,#f39595);color:var(--bg,#0d0f12);border:1px solid transparent}.ds-danger:hover:not(:disabled),.ds-danger:active:not(:disabled){background:var(--raised,#1c2026);color:var(--text,#edf0f4)}"
+    },
+    {
+      "name": "带标签输入框",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "保留可见标签、说明与焦点；手机正文输入增至16px。",
+      "html": "<label class=\"ds-field\">规则名称<input placeholder=\"输入名称\"><small>用于识别这条规则。</small></label>",
+      "css": ".ds-field{display:grid;gap:6px;max-width:320px;color:var(--text,#edf0f4);font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-size:13px;font-weight:500;line-height:1.5;}.ds-field input{font:inherit;font-weight:400;min-width:0;padding:10px 12px;border:1px solid var(--line,#2c323b);border-radius:8px;background:var(--surface,#15181d);color:var(--text,#edf0f4);caret-color:var(--blue,#79afff)}.ds-field input::placeholder,.ds-field small{color:var(--muted,#a0a8b4)}.ds-field small{font-size:12px}.ds-field input:hover{border-color:var(--muted,#a0a8b4)}.ds-field input:focus{outline:2px solid var(--blue,#79afff);outline-offset:1px}@media(max-width:760px){.ds-field input{font-size:16px;min-height:44px}}"
+    },
+    {
+      "name": "手机四项导航",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "源界面固定在视口底部；此预览为同样式静态片段。",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"主要页面\"><button aria-current=\"page\" ><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg><span>总览</span></button><button ><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"8\" y=\"3\" width=\"12\" height=\"16\" rx=\"2\"/><path d=\"M4 7v13a1 1 0 0 0 1 1h11\"/></svg><span>种子</span></button><button ><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2 6c3-4 6 4 10 0s7 4 10 0M2 12c3-4 6 4 10 0s7 4 10 0M2 18c3-4 6 4 10 0s7 4 10 0\"/></svg><span>站点</span></button><button ><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 3H5a2 2 0 0 0-2 2v2h5M8 3v16a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-2h-5V5a2 2 0 0 0-2-2H8ZM12 7h4M12 11h4M12 15h4\"/></svg><span>记录</span></button></nav>",
+      "css": ".ds-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:5px 8px;background:var(--surface,#15181d);border-top:1px solid var(--line,#2c323b);font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-size:13px;font-weight:500;line-height:1.5;}.ds-tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;padding:4px;border:0;border-radius:7px;background:transparent;color:var(--muted,#a0a8b4);font:inherit;font-size:10px;line-height:1.3;cursor:pointer}.ds-tabs button[aria-current=page],.ds-tabs button:hover,.ds-tabs button:active{background:var(--raised,#1c2026);color:var(--text,#edf0f4)}.ds-tabs button:focus-visible{outline:2px solid var(--blue,#79afff);outline-offset:3px}"
+    },
+    {
+      "name": "状态标签",
+      "kind": "chip",
+      "refersTo": "state-tag",
+      "description": "安静底色与可读状态名称；颜色不单独承担含义。",
+      "html": "<span class=\"ds-tag\">等待同步</span>",
+      "css": ".ds-tag{display:inline-flex;padding:3px 7px;border-radius:4px;background:var(--raised,#1c2026);color:var(--muted,#a0a8b4);font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-size:11px;line-height:1.5;white-space:nowrap}"
+    },
+    {
+      "name": "平面面板",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "细边框与层次色；普通内容没有阴影。",
+      "html": "<section class=\"ds-panel\"><h2>下载器状态</h2><p>当前速率未知，等待同步。</p></section>",
+      "css": ".ds-panel{border:1px solid var(--line,#2c323b);border-radius:12px;background:var(--surface,#15181d);color:var(--text,#edf0f4);overflow:hidden;padding:20px 22px;font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;line-height:1.5}.ds-panel h2{font-size:16px;font-weight:600;margin:0 0 5px}.ds-panel p{font-size:12px;line-height:1.65;color:var(--muted,#a0a8b4);margin:0}@media(max-width:760px){.ds-panel{padding:16px}.ds-panel h2{font-size:14px}}"
+    },
+    {
+      "name": "站点状态行",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "整行入口，原有站点图标优先；未知数据直接显示缺失标记。",
+      "html": "<button class=\"ds-flow\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2 6c3-4 6 4 10 0s7 4 10 0M2 12c3-4 6 4 10 0s7 4 10 0M2 18c3-4 6 4 10 0s7 4 10 0\"/></svg><span class=\"ds-flow-name\"><strong>站点名称</strong><small>等待带宽池数据</small></span><span class=\"ds-flow-rates\">↓ —<small>↑ —</small></span></button>",
+      "css": ".ds-flow{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:16px 20px;border:0;border-top:1px solid var(--line,#2c323b);background:var(--surface,#15181d);color:var(--text,#edf0f4);font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;line-height:1.5;cursor:pointer}.ds-flow:hover,.ds-flow:active{background:var(--raised,#1c2026)}.ds-flow:focus-visible{outline:2px solid var(--blue,#79afff);outline-offset:3px}.ds-flow-name{flex:1;min-width:0}.ds-flow strong{display:block;font-size:13px;font-weight:500;overflow-wrap:anywhere}.ds-flow small{display:block;margin-top:4px;font-size:11px;color:var(--muted,#a0a8b4)}.ds-flow-rates{text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:var(--down,#79afff);white-space:nowrap}@media(max-width:760px){.ds-flow{padding:14px 16px;min-height:74px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "种子港工作空间",
+    "overview": "种子港以清楚、克制的工作界面呈现多个下载器、带宽池和规则。品牌来自保留的名称、锚形标识及原有站点图标；大面积中性色面让实际状态、速率和操作结果成为视觉重点。桌面提供紧凑、完整的管理空间，手机使用熟悉的触控列表与导航。\n\n本系统记录已实现的样式，而非待实现的方案。`web/main.js` 依次载入 `style.css`、`features.css`、`workspace.css`；最后一层的主题值与界面覆盖是当前视觉依据。前两层继续提供兼容结构、表单与部分组件细节，不应将它们已被覆盖的绿底、藏青配色重新引入。",
+    "keyCharacteristics": [
+      "中性深浅两套主题，蓝色突出下载数据与焦点，其他状态有独立文字说明。",
+      "系统中文字体、清楚的字号层级与等宽数字特性，优先保障扫描速度。",
+      "平面容器与细分隔线，浮层才使用阴影。",
+      "保留原有站点图标、管理表单和规则操作语义。",
+      "离线、部分数据、缺失与真实零值分别表达。"
+    ],
+    "rules": [
+      {
+        "name": "Theme Pair",
+        "body": "两套主题共享角色和结构；切换时更换整套语义颜色，不用固定的旧主题色补齐局部组件。",
+        "section": "colors"
+      },
+      {
+        "name": "State With Words",
+        "body": "状态颜色必须与可读名称、数量或时间共同出现，不能独自承担在线、部分统计或错误含义。",
+        "section": "colors"
+      },
+      {
+        "name": "Stable Numerals",
+        "body": "速率、容量、页码和对齐的数据列使用等宽数字特性；保留 KiB/MiB/GiB 与 B/s 等实际单位，不把速率和累计量混用。",
+        "section": "typography"
+      },
+      {
+        "name": "Device Role",
+        "body": "响应式改变信息密度和入口形态；手机状态查看与桌面复杂编辑各自保留清楚的操作范围。",
+        "section": "layout"
+      },
+      {
+        "name": "Flat Workspace",
+        "body": "工作内容保持平面分层；只有暂时覆盖内容的浮层使用阴影。",
+        "section": "elevation"
+      },
+      {
+        "name": "Known Value",
+        "body": "零值必须来自有效观测；缺失、过期与部分贡献数据保留各自说明，不能通过数值兜底变成实时零。",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do 使用整套主题角色，保留种子港名称、锚形标识与原有站点图标。",
+      "Do 保持稳定数字、方向标签、实际单位和同步时间，给部分数据明确范围说明。",
+      "Do 保留桌面表格、规则排序、原有表单、控制结果解释与恢复语义。",
+      "Do 在实际断点检查抽屉、轨道、固定底栏、长名称、焦点与滚动空间。"
+    ],
+    "donts": [
+      "Don't 从兼容样式层重新引入已被覆盖的旧主题配色。",
+      "Don't 将缺失或离线速率呈现为零，也不要补造未采集的趋势。",
+      "Don't 只靠颜色表达异常，或将限速目标、当前速率和回读值混为一谈。",
+      "Don't 为普通工作面板增加装饰阴影、无业务作用的动画或额外标语。",
+      "Don't 将合成数据截图、浏览器视口模拟或源码检查称为真机、真实下载器或部署验收。"
+    ]
+  }
+}

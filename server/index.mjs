@@ -12,6 +12,7 @@ import { UpdateManager } from './updates.mjs';
 import { reorderRules } from './rule-order.mjs';
 import { validateIcon } from './site-icons.mjs';
 import { redact } from './logs.mjs';
+import { ReadModel } from './read-model.mjs';
 
 const root = resolve(fileURLToPath(new URL('..',import.meta.url)));
 const appMeta=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
@@ -21,6 +22,7 @@ if (!store.get('admin') && process.env.ADMIN_PASSWORD) {
   store.set('admin',store.password(process.env.ADMIN_PASSWORD));
 }
 const controller = new Controller(store), sessions = new Map(), failures = new Map();
+const readModel = new ReadModel(controller,appMeta.version);
 const updates=new UpdateManager(store,{version:appMeta.version,directory:process.env.UPDATE_STATE_DIR});
 const fail = (message,status=400) => { const e = new Error(message); e.status=status; throw e; };
 const json = (res,body,status=200,headers={}) => { res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}); res.end(JSON.stringify(body)); };
@@ -97,6 +99,14 @@ const server=http.createServer(async(req,res)=>{
         failures.delete(address); return signin(res);
       }
       if(!session(req)) fail('请先登录',401);
+      if(method==='GET') {
+        if(path==='/api/summary')return json(res,readModel.summary());
+        if(path==='/api/workspace')return json(res,readModel.workspace());
+        if(path==='/api/catalog')return json(res,readModel.catalog());
+        if(path==='/api/events')return json(res,store.events());
+        if(path==='/api/torrents')return json(res,readModel.torrents(Object.fromEntries(url.searchParams)));
+        if(path.startsWith('/api/torrents/'))return json(res,readModel.detail(decodeURIComponent(path.slice(14))));
+      }
       if(path==='/api/traffic'&&method==='GET') {
         try {return json(res,store.traffic.totals(store.get('settings').mode,controller.clients(),url.searchParams.get('range')||'1h',controller.runtime,Date.now(),Math.max(60000,store.get('settings').pollSeconds*3000)));}catch(e){fail(e.message);}
       }
@@ -118,7 +128,7 @@ const server=http.createServer(async(req,res)=>{
       if(path==='/api/auth/logout'&&method==='POST') { sessions.delete(session(req)); return json(res,{ok:true},200,{'Set-Cookie':'harbor=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'}); }
       if(path==='/api/auth/password'&&method==='POST') { const b=await body(req); if(!store.verify(String(b.current||''))) fail('当前密码不正确',403); store.set('admin',store.password(password(b.password))); sessions.clear(); return signin(res); }
       if(path==='/api/state'&&method==='GET') return json(res,{...controller.state(),version:appMeta.version});
-      if(path==='/api/refresh'&&method==='POST') { await controller.refresh(false); return json(res,controller.state()); }
+      if(path==='/api/refresh'&&method==='POST') { await controller.refresh(false); return json(res,readModel.summary()); }
       if(path==='/api/release'&&method==='POST') { if(controller.busy) fail('正在同步下载器，请稍后重试',409); return json(res,await controller.release()); }
       if(path==='/api/reclaim'&&method==='POST') { const b=await body(req); if(controller.busy) fail('正在同步下载器，请稍后重试',409); try { await controller.reclaim(clean(b.key)); } catch(e) { fail(e.message,422); } return json(res,{ok:true}); }
       if(path==='/api/clients/test'&&method==='POST') {

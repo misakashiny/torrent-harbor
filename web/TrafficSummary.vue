@@ -7,7 +7,8 @@ const options=[['1h','1 小时'],['12h','12 小时'],['24h','24 小时'],['3d','
 const range=ref('24h'),stats=ref(null),error=ref(''),loading=ref(false);let timer,sequence=0;
 async function load(){const seq=++sequence;loading.value=true;try{const s=await props.api('traffic?range='+range.value);if(seq===sequence){stats.value=s;error.value='';}}catch(e){if(seq===sequence)error.value=e.message;}finally{if(seq===sequence)loading.value=false;}}
 watch([range,()=>props.mode],()=>{stats.value=null;void load();});
-onMounted(()=>{load();timer=setInterval(load,15000);});onUnmounted(()=>{sequence++;clearInterval(timer);});
+function visibleLoad(){if(!document.hidden)load();}
+onMounted(()=>{load();timer=setInterval(visibleLoad,15000);document.addEventListener('visibilitychange',visibleLoad);});onUnmounted(()=>{sequence++;clearInterval(timer);document.removeEventListener('visibilitychange',visibleLoad);});
 const date=value=>new Intl.DateTimeFormat('zh-CN',{timeZone:props.timezone||'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(value);
 const note=computed(()=>{
   const s=stats.value;if(!s)return '正在读取累计流量…';
@@ -20,9 +21,8 @@ const note=computed(()=>{
 </script>
 <template>
   <section class="panel traffic-summary" aria-label="累计传输流量" :aria-busy="loading">
-    <div class="traffic-summary-head"><h2>累计传输</h2><div class="range-tabs" aria-label="累计流量时间范围"><button v-for="[id,label] in options" :key="id" :aria-pressed="range===id" :class="{active:range===id}" @click="range=id">{{label}}</button></div></div>
+    <div class="traffic-summary-head"><h2>累计传输</h2><select v-model="range" aria-label="累计流量时间范围"><option v-for="[id,label] in options" :key="id" :value="id">{{label}}</option></select></div>
     <p v-if="error" class="error-message" role="alert">{{error}} <button class="text-button" @click="load">重试</button></p>
-    <template v-else><div class="traffic-values"><div><span><ArrowDown :size="16"/>总下载</span><strong>{{formatBytes(stats?.download)}}</strong></div><div><span><ArrowUp :size="16"/>总上传</span><strong>{{formatBytes(stats?.upload)}}</strong></div></div><p class="traffic-note">{{note}}<span v-if="mode==='demo'"> 演示数据。</span></p>
-    <details v-if="stats?.clients.length" class="traffic-breakdown"><summary>查看各下载器累计</summary><div v-for="c in stats.clients" :key="c.id"><span>{{c.name}}<small v-if="c.stale"> · 数据待同步</small></span><span>↓ {{formatBytes(c.download)}}<br>↑ {{formatBytes(c.upload)}}</span></div></details></template>
+    <template v-else><div class="traffic-values"><div><span><ArrowDown :size="16"/>总下载</span><strong>{{formatBytes(stats?.download)}}</strong></div><div><span><ArrowUp :size="16"/>总上传</span><strong>{{formatBytes(stats?.upload)}}</strong></div></div><p class="traffic-note">{{range==='all'?'下载器历史累计':stats?.partial?'本时段尚未录满或存在中断，仅显示已记录流量':'本时段已记录流量'}}<span v-if="mode==='demo'"> · 演示数据</span></p><details class="traffic-coverage"><summary>统计说明与各下载器</summary><p>{{note}}</p><div v-if="stats?.clients.length" class="traffic-breakdown"><div v-for="c in stats.clients" :key="c.id"><span>{{c.name}}<small v-if="c.stale"> · 数据待同步</small></span><span>↓ {{formatBytes(c.download)}}<br>↑ {{formatBytes(c.upload)}}</span></div></div></details></template>
   </section>
 </template>

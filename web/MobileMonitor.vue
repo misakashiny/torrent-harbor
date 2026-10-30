@@ -1,0 +1,23 @@
+<script setup>
+import { ref, computed } from 'vue';
+import { ChevronRight, ArrowLeft, Sun, Moon, LogOut } from 'lucide-vue-next';
+import SiteIcon from './SiteIcon.vue';
+import {poolStatus,poolRate} from './pool-status.mjs';
+const props=defineProps({page:String,data:Object,rules:Array,format:Function,time:Function,theme:String});
+const emit=defineEmits(['members','theme','logout']);
+const selected=ref(''),search=ref('');
+const pool=computed(()=>props.data.pools.find(p=>p.id===selected.value));
+const pools=computed(()=>props.data.pools.filter(p=>p.name.toLowerCase().includes(search.value.toLowerCase())));
+const stats=p=>props.data.poolStats[p.id];
+const rate=(p,dir)=>poolRate(stats(p),dir,props.format);
+const note=p=>poolStatus(stats(p)).note;
+</script>
+<template>
+ <template v-if="page==='pools'">
+  <div v-if="pool" class="panel mobile-pool-detail"><button class="text-button" @click="selected='' "><ArrowLeft :size="17"/>返回站点</button><div class="pool-detail-top"><SiteIcon :pool="pool" :rules="rules" :size="40"/><h2>{{pool.name}}</h2></div><dl><div><dt>成员</dt><dd>{{data.poolStats[pool.id]?.count||0}} 个种子</dd></div><div><dt>{{poolStatus(stats(pool)).partial?'部分成员速率 ↓ / ↑':'实时下载 / 上传'}}</dt><dd>↓ {{rate(pool,'download')}}<br>↑ {{rate(pool,'upload')}}</dd></div><div><dt>同步状态</dt><dd>{{note(pool)}}<br>{{stats(pool)?.time?'最早成员快照 '+time(stats(pool).time):'暂无成功同步时间'}}</dd></div><div><dt>共享下载上限</dt><dd>{{format(pool.download)}}</dd></div><div><dt>共享上传上限</dt><dd>{{format(pool.upload)}}</dd></div><div><dt>分配权重</dt><dd>{{pool.weight}}</dd></div></dl><button class="btn primary" @click="emit('members',pool.id)">查看成员种子<ChevronRight :size="16"/></button><p class="page-note">池上限和匹配规则请在电脑端编辑。</p></div>
+  <template v-else><input class="monitor-search" v-model="search" aria-label="搜索站点" placeholder="搜索带宽池或站点"><section class="panel"><button class="flow-row" v-for="p in pools" :key="p.id" @click="selected=p.id"><SiteIcon :pool="p" :rules="rules" :size="30"/><span class="flow-name"><strong>{{p.name}}</strong><small>{{stats(p)?stats(p).count+' 个种子':'成员数待同步'}} · 上传上限 {{format(p.upload)}}</small><small v-if="poolStatus(stats(p)).unknown||poolStatus(stats(p)).partial" class="pool-freshness">{{note(p)}}<span v-if="stats(p)?.time"> · 快照 {{time(stats(p).time)}}</span></small></span><span class="flow-rates"><span>↓ {{rate(p,'download')}}</span><small>↑ {{rate(p,'upload')}}</small></span><ChevronRight :size="15"/></button><p v-if="!pools.length" class="empty-message">没有符合条件的带宽池。</p></section><p class="page-note">显示原有带宽池及已配置图标，复杂编辑请使用电脑。</p></template>
+ </template>
+ <section v-else-if="page==='clients'" class="panel"><div class="panel-head"><h2>连接状态</h2></div><div v-for="c in data.clients" :key="c.id" class="monitor-client"><h3><i class="dot" :class="c.online&&!c.stale?'green-dot':'warning-dot'"></i>{{c.name}}</h3><p>{{c.type==='qb'?'qBittorrent':'Transmission'}} {{c.version}} · {{c.pending?'连接中':c.online&&!c.stale?'在线':'同步待恢复'}}</p><p>{{c.torrentCount}} 个种子 · 同步 {{time(c.time)}}</p><div v-if="c.online&&!c.stale" class="flow-rates">↓ {{format(c.download)}} · ↑ {{format(c.upload)}}</div><p v-else>最后速率 ↓ {{c.lastDownload===null?'—':format(c.lastDownload)}} / ↑ {{c.lastUpload===null?'—':format(c.lastUpload)}}，当前速率未知。</p><p v-if="c.error" class="error-message">{{c.error}}</p></div></section>
+ <section v-else-if="page==='rules'" class="panel"><div class="panel-head"><h2>自动化规则</h2><span class="secondary">电脑端可拖动排序</span></div><article class="monitor-rule" v-for="r in [...rules].sort((a,b)=>a.priority-b.priority)" :key="r.id"><h3>{{r.name}}<small>{{r.enabled?'启用':'停用'}} · 优先级 {{r.priority}}</small></h3><p>{{r.hosts.join(' / ')||'全部 Tracker'}}<span v-if="r.tags.length"> · 标签 {{r.tags.join(' + ')}}</span></p><p>{{data.pools.find(p=>p.id===r.poolId)?.name||'单种限速'}} · 命中 {{data.ruleCounts[r.id]||0}} 个种子</p></article><p v-if="!rules.length" class="empty-message">尚未配置规则。</p></section>
+ <section v-else class="panel mobile-preferences"><div class="panel-head"><h2>{{page==='updates'?'版本与更新':'外观与设置'}}</h2></div><div class="setting-row"><div><strong>外观主题</strong><p>保存在当前浏览器</p></div><button class="btn" @click="emit('theme')"><Sun v-if="theme==='dark'" :size="17"/><Moon v-else :size="17"/>{{theme==='dark'?'切换浅色':'切换深色'}}</button></div><div class="setting-row"><div><strong>当前版本</strong><p>v{{data.version}}</p></div></div><div class="setting-row"><div><strong>{{data.settings.controlEnabled?'自动接管中':'只读预览'}}</strong><p>后台继续运行。调度、接管、更新和连接设置请在电脑端管理。</p></div></div><div class="setting-row"><button class="btn" @click="emit('logout')"><LogOut :size="16"/>退出登录</button></div></section>
+</template>

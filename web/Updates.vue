@@ -13,15 +13,15 @@ async function check(){await run(async()=>{state.value=await props.api('updates/
 async function save(){await run(async()=>{state.value=await props.api('updates/config','PUT',{repository:repository.value,autoCheck:autoCheck.value});props.notify('更新来源已保存');});}
 async function plan(action){await run(async()=>{confirmation.value=await props.api('updates/plan','POST',{action});});}
 async function apply(){await run(async()=>{const result=await props.api('updates/apply','POST',{planId:confirmation.value.id});state.value.job={id:result.jobId,state:'queued',message:'已提交主机执行器'};confirmation.value=null;props.notify('版本操作已提交，应用重启后可能需要重新登录');});}
-onMounted(async()=>{await load(true);timer=setInterval(()=>load(),4000);});onUnmounted(()=>clearInterval(timer));
+function visibleLoad(){if(!document.hidden)load();}
+onMounted(async()=>{await load(true);timer=setInterval(visibleLoad,4000);document.addEventListener('visibilitychange',visibleLoad);});onUnmounted(()=>{clearInterval(timer);document.removeEventListener('visibilitychange',visibleLoad);});
 </script>
 
 <template>
   <div v-if="!state" class="empty-card">正在读取版本信息…</div>
   <div v-else class="updates-layout">
     <section class="panel update-hero">
-      <div class="update-emblem"><Download :size="30"/></div>
-      <div class="update-heading"><span class="eyebrow">KEEP YOUR HARBOR CURRENT</span><h2>让种子港保持更新</h2><p>从 GitHub 正式版本获取安装包，校验后备份数据，再切换版本。</p></div>
+      <div class="update-heading"><h2>GitHub 版本更新</h2><p>校验安装包、备份数据后切换版本。</p></div>
       <button class="btn primary" @click="check" :disabled="busy||active"><RefreshCw :size="16" :class="{spin:busy}"/>检查更新</button>
       <div class="version-grid"><div><span>当前版本</span><strong>v{{state.version}}</strong><small>{{state.platform}}</small></div><div><span>最新正式版本</span><strong>{{state.latest?.tag||'等待检查'}}</strong><small>{{state.latest?(state.available?'有新版本可用':'已是当前正式版本或更新'):'点击检查获取发布信息'}}</small></div><div><span>主机更新执行器</span><strong class="agent-label"><i class="dot" :class="state.canInstall?'green-dot':'amber-dot'"></i>{{state.agent?.recoveryNeeded?'恢复处理中':state.canInstall?'已连接':state.agentConnected?'来源不一致':'未连接'}}</strong><small>更新时仅重启种子港</small></div></div>
     </section>
