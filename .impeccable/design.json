@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-30T14:03:09.597140+00:00",
+  "generatedAt": "2026-10-30T17:09:28.107761+00:00",
   "title": "Design System: 种子港 / Torrent Harbor",
   "extensions": {
     "colorMeta": {
@@ -462,8 +462,8 @@
       "collapsedSidebar": "78px",
       "phoneDrawer": "250px",
       "mainMaxWidth": "1560px",
-      "desktopTopbar": "62px",
-      "phoneTopbar": "58px",
+      "desktopTopbar": "48px",
+      "phoneTopbar": "56px",
       "phoneContentBottom": "calc(84px + env(safe-area-inset-bottom))",
       "phoneTabs": [
         "总览",
@@ -485,31 +485,47 @@
       "web/Updates.vue",
       "web/format.mjs",
       "web/pool-status.mjs",
-      "web/SiteIcon.vue"
+      "web/SiteIcon.vue",
+      "web/quick-actions.css",
+      "web/refinement.css",
+      "web/QuickActions.vue",
+      "web/ControlProgress.vue",
+      "web/LimitStatus.vue",
+      "server/control-job.mjs",
+      "server/batch-limits.mjs"
     ],
     "evidence": {
-      "kind": "source-derived implemented system",
-      "rendered": [
-        ".impeccable/review/desktop.png",
-        ".impeccable/review/mobile.png"
-      ],
+      "kind": "Source-derived implemented refinement; separate evidence classes below.",
+      "renderedDirectory": "test-results/batch-progress-1.5.0",
+      "browserChecks": "test-results/batch-progress-1.5.0/browser-checks.json",
       "review": [
-        ".impeccable/review/finish-review.txt",
-        ".impeccable/review/finish-verdict.txt"
+        "test-results/batch-progress-1.5.0/finish-review.txt"
       ],
+      "reviewStatus": "Four material findings recorded; source corrections documented. Subsequent recaptures and reviewer continuation determine the final visual verdict.",
+      "syntheticBrowser": "Labelled 10,000 torrents plus 30 pools/rules; desktop and simulated phone viewports, progress and selected UI states.",
+      "benchmark": {
+        "record": "test-results/batch-progress-1.5.0/benchmark.json",
+        "kind": "Local synthetic 1ms/RPC transport with real SQLite WAL; no NAS writes."
+      },
+      "realClientRecord": {
+        "record": "test-results/batch-progress-1.5.0/nas-native-batch-result.txt",
+        "scope": "600 same-value native QB/TR limit writes and readbacks; all 6,638 torrent limits, Transmission native flags/retained values and configuration reported unchanged.",
+        "independentlyRevalidatedByDocumenter": false
+      },
       "limitations": [
-        "Synthetic isolated data and browser viewport simulations.",
-        "No physical-phone acceptance.",
-        "The follow-up ship verdict resolves two findings; the preceding full review retains whole-surface scope.",
-        "Some supporting light-theme and records-page captures predate the final fix batch.",
-        "No standalone external QUALITY BAR card; no backend/control or deployment acceptance claimed."
+        "Browser captures use isolated synthetic data.",
+        "Browser viewport simulation is not physical-phone acceptance.",
+        "Local benchmark is not a NAS 10k end-to-end or saturation claim.",
+        "Same-value native tests do not prove arbitrary new targets or a sustained real-client load.",
+        "This documentation pass did not independently repeat real-client tests or deploy to NAS.",
+        "Final visual acceptance is owned by the subsequent correction recaptures and review."
       ],
       "tonalRamps": "Generated OKLCH preview ramps; canonical values are the actual source colors, and ramp steps are not additional UI tokens."
     },
     "overviewLayout": {
       "desktop": {
         "columns": "minmax(0,1.7fr) minmax(290px,1fr)",
-        "gap": 20,
+        "gap": 16,
         "primary": [
           "realtime",
           "connections"
@@ -535,6 +551,113 @@
       },
       "preserveTrafficDisclosure": true,
       "restoreConnectionFocus": true
+    },
+    "stylesheetOrder": [
+      "web/style.css",
+      "web/features.css",
+      "web/workspace.css",
+      "web/quick-actions.css",
+      "web/refinement.css"
+    ],
+    "themePreference": {
+      "firstUse": "light",
+      "storageKey": "harbor-theme",
+      "preserveExistingPreference": true
+    },
+    "geometry": {
+      "panelRadius": "8px",
+      "desktopModalRadius": "12px",
+      "buttonRadius": "7px",
+      "inputRadius": "8px",
+      "desktopTopbarHeight": "48px",
+      "phoneTopbarHeight": "56px"
+    },
+    "managementAlignment": {
+      "torrentFilters": "Two rows; selects fill assigned grid tracks.",
+      "clientNativeCaps": "Left labels and right-aligned tabular values in horizontal rows.",
+      "rulesNarrowDesktop": {
+        "minViewport": "761px",
+        "maxViewport": "1000px",
+        "minimumTableWidth": "820px",
+        "overflow": "horizontal inside rule panel; phone monitor list unchanged"
+      },
+      "ruleOrdering": "Original atomic drag/arrow behavior retained."
+    },
+    "controlProgress": {
+      "source": "web/ControlProgress.vue",
+      "backendSources": [
+        "server/control-job.mjs",
+        "server/batch-limits.mjs"
+      ],
+      "phases": [
+        "preparing",
+        "writing",
+        "confirming",
+        "finished",
+        "interrupted"
+      ],
+      "statuses": [
+        "running",
+        "completed",
+        "attention",
+        "interrupted"
+      ],
+      "counts": [
+        "processed",
+        "total",
+        "confirmed",
+        "unchanged",
+        "failed",
+        "conflict",
+        "blocked",
+        "remaining"
+      ],
+      "confirmation": "Confirmed requires successful matching readback; already-matching preread values count separately as unchanged. The displayed confirmed figure sums confirmed and unchanged.",
+      "units": "Upload and download are separate limit items; torrent count is shown separately.",
+      "persistence": "Control job checkpoints persist with managed state; a previously running job becomes interrupted after process restart.",
+      "completion": "Any failed, conflicting, or blocked items require attention; a thrown job error is interrupted.",
+      "eta": {
+        "minimumProcessed": 100,
+        "minimumElapsedSeconds": 3,
+        "runningOnly": true,
+        "basis": "Observed processed items and elapsed time; estimate only."
+      },
+      "finishedVisibilityHours": 24,
+      "dismiss": "Finished jobs may be dismissed; running jobs cannot.",
+      "accessibility": "Progressbar role with min/max/current and readable phase."
+    },
+    "provenance": {
+      "previousGeneratedAt": "2026-10-30T14:03:09.597140+00:00",
+      "previousEvidence": {
+        "kind": "source-derived implemented system",
+        "rendered": [
+          ".impeccable/review/desktop.png",
+          ".impeccable/review/mobile.png"
+        ],
+        "review": [
+          ".impeccable/review/finish-review.txt",
+          ".impeccable/review/finish-verdict.txt"
+        ],
+        "limitations": [
+          "Synthetic isolated data and browser viewport simulations.",
+          "No physical-phone acceptance.",
+          "The follow-up ship verdict resolves two findings; the preceding full review retains whole-surface scope.",
+          "Some supporting light-theme and records-page captures predate the final fix batch.",
+          "No standalone external QUALITY BAR card; no backend/control or deployment acceptance claimed."
+        ],
+        "tonalRamps": "Generated OKLCH preview ramps; canonical values are the actual source colors, and ramp steps are not additional UI tokens."
+      },
+      "surfaceBrief": ".impeccable/surfaces/web-app-vue.md",
+      "retainedSeed": "seed:b48566292dc62dd2",
+      "directionContract": "test-results/batch-progress-1.5.0/direction-contract.txt",
+      "approvedReferences": [
+        "output/imagegen/传输总览-界面优化效果图-20261031.png",
+        "output/imagegen/所有种子-界面优化效果图-20261031.png",
+        "output/imagegen/带宽池-界面优化效果图-20261031.png",
+        "output/imagegen/一键操作-界面优化效果图-20261031.png",
+        "output/imagegen/自动化规则-界面优化效果图-20261031.png",
+        "output/imagegen/下载器-界面优化效果图-20261031.png"
+      ]
     }
   },
   "components": [
@@ -592,7 +715,7 @@
       "refersTo": "panel",
       "description": "细边框与层次色；普通内容没有阴影。",
       "html": "<section class=\"ds-panel\"><h2>下载器状态</h2><p>当前速率未知，等待同步。</p></section>",
-      "css": ".ds-panel{border:1px solid var(--line,#2c323b);border-radius:12px;background:var(--surface,#15181d);color:var(--text,#edf0f4);overflow:hidden;padding:20px 22px;font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;line-height:1.5}.ds-panel h2{font-size:16px;font-weight:600;margin:0 0 5px}.ds-panel p{font-size:12px;line-height:1.65;color:var(--muted,#a0a8b4);margin:0}@media(max-width:760px){.ds-panel{padding:16px}.ds-panel h2{font-size:14px}}"
+      "css": ".ds-panel{border:1px solid var(--line,#2c323b);border-radius:8px;background:var(--surface,#15181d);color:var(--text,#edf0f4);overflow:hidden;padding:20px 22px;font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;line-height:1.5}.ds-panel h2{font-size:16px;font-weight:600;margin:0 0 5px}.ds-panel p{font-size:12px;line-height:1.65;color:var(--muted,#a0a8b4);margin:0}@media(max-width:760px){.ds-panel{padding:16px}.ds-panel h2{font-size:14px}}"
     },
     {
       "name": "站点状态行",
@@ -601,17 +724,25 @@
       "description": "整行入口，原有站点图标优先；未知数据直接显示缺失标记。",
       "html": "<button class=\"ds-flow\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2 6c3-4 6 4 10 0s7 4 10 0M2 12c3-4 6 4 10 0s7 4 10 0M2 18c3-4 6 4 10 0s7 4 10 0\"/></svg><span class=\"ds-flow-name\"><strong>站点名称</strong><small>等待带宽池数据</small></span><span class=\"ds-flow-rates\">↓ —<small>↑ —</small></span></button>",
       "css": ".ds-flow{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:16px 20px;border:0;border-top:1px solid var(--line,#2c323b);background:var(--surface,#15181d);color:var(--text,#edf0f4);font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;line-height:1.5;cursor:pointer}.ds-flow:hover,.ds-flow:active{background:var(--raised,#1c2026)}.ds-flow:focus-visible{outline:2px solid var(--blue,#79afff);outline-offset:3px}.ds-flow-name{flex:1;min-width:0}.ds-flow strong{display:block;font-size:13px;font-weight:500;overflow-wrap:anywhere}.ds-flow small{display:block;margin-top:4px;font-size:11px;color:var(--muted,#a0a8b4)}.ds-flow-rates{text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:var(--down,#79afff);white-space:nowrap}@media(max-width:760px){.ds-flow{padding:14px 16px;min-height:74px}}"
+    },
+    {
+      "name": "批量限速执行进度",
+      "kind": "custom",
+      "refersTo": "control-progress",
+      "description": "按真实已处理数展示进度，确认、失败、外部修改和暂缓分别可读。静态片段不执行下载器操作。",
+      "html": "<section class=\"ds-progress\" aria-label=\"限速任务进度\"><div class=\"ds-progress-head\"><strong>批量调整限速</strong><span>回读确认</span></div><div class=\"ds-progress-numbers\"><b>3,556 <small>/ 10,000 项</small></b><span>35%</span></div><div class=\"ds-progress-track\" role=\"progressbar\" aria-valuenow=\"3556\" aria-valuemin=\"0\" aria-valuemax=\"10000\" aria-valuetext=\"3556 / 10000 项，回读确认\"><span></span></div><div class=\"ds-progress-meta\"><span>已确认 3,556</span><span>失败 0 · 外部修改 0 · 暂缓 0</span><span>剩余 6,444</span></div><div class=\"ds-progress-foot\"><span>演示静态片段 · 上传、下载分别计项</span><button>查看记录</button></div></section>",
+      "css": ".ds-progress{border:1px solid var(--line,#d7dce3);border-radius:8px;background:var(--surface,#fff);color:var(--text,#202630);padding:16px 20px;font-family:system-ui,-apple-system,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;line-height:1.5}.ds-progress-head,.ds-progress-numbers,.ds-progress-meta,.ds-progress-foot{display:flex;align-items:center;flex-wrap:wrap;gap:6px 20px}.ds-progress-head{font-size:13px;gap:10px}.ds-progress-head>span,.ds-progress-meta,.ds-progress-foot,.ds-progress-numbers small{color:var(--muted,#566171)}.ds-progress-numbers{align-items:baseline;justify-content:space-between;margin:10px 0 8px;font-variant-numeric:tabular-nums}.ds-progress-numbers b{font-size:20px;font-weight:600}.ds-progress-numbers small{font-size:12px;font-weight:400}.ds-progress-track{height:6px;background:var(--raised,#eaedf1);border-radius:3px;overflow:hidden}.ds-progress-track>span{height:100%;display:block;width:35%;background:var(--blue,#2568c2);transition:width .2s ease}.ds-progress-meta,.ds-progress-foot{font-size:12px;margin-top:12px;font-variant-numeric:tabular-nums}.ds-progress-foot{justify-content:space-between;margin-top:8px}.ds-progress-foot button{border:0;background:none;color:var(--text,#202630);font:inherit;cursor:pointer}.ds-progress-foot button:hover{text-decoration:underline}.ds-progress-foot button:focus-visible{outline:2px solid var(--blue,#2568c2);outline-offset:3px}.ds-progress.ds-attention .ds-progress-track>span{background:var(--warn,#8a5c20)}@media(max-width:760px){.ds-progress{padding:14px 16px}.ds-progress-meta,.ds-progress-foot{font-size:11px;gap:5px 12px}.ds-progress-foot button{min-height:40px}}@media(prefers-reduced-motion:reduce){.ds-progress-track>span{transition:none}}"
     }
   ],
   "narrative": {
     "northStar": "种子港工作空间",
-    "overview": "种子港以清楚、克制的工作界面呈现多个下载器、带宽池和规则。品牌来自保留的名称、锚形标识及原有站点图标；大面积中性色面让实际状态、速率和操作结果成为视觉重点。桌面提供紧凑、完整的管理空间，手机使用熟悉的触控列表与导航。\n\n本系统记录已实现的样式，而非待实现的方案。`web/main.js` 依次载入 `style.css`、`features.css`、`workspace.css`；最后一层的主题值与界面覆盖是当前视觉依据。前两层继续提供兼容结构、表单与部分组件细节，不应将它们已被覆盖的绿底、藏青配色重新引入。",
+    "overview": "种子港以清楚、克制的工作界面呈现多个下载器、带宽池和规则。品牌来自保留的名称、锚形标识及原有站点图标；大面积中性色面让实际状态、速率和操作结果成为视觉重点。桌面提供紧凑、完整的管理空间，手机使用熟悉的触控列表与导航。\n\n本系统记录已实现的样式，而非待实现的方案。`web/main.js` 依次载入 `style.css`、`features.css`、`workspace.css`、`quick-actions.css`、`refinement.css`；主题角色沿用工作空间层，最后一层决定本轮页面密度、对齐、面板与顶部栏几何。前面的样式层继续提供兼容结构、表单与组件细节，不应将它们已被覆盖的绿底、藏青配色重新引入。首次使用的浏览器默认浅色；已保存的 `harbor-theme` 偏好优先保留，深色与浅色仍可切换。\n\n证据范围：本轮依据当前源码、用户批准的六页结构与风格参考，以及 `test-results/batch-progress-1.5.0` 的桌面、手机视口、进度状态与断点检查记录。浏览器数据明确标为合成的 (10,000) 个种子与 (30) 个池／规则；窗口模拟不等于手机真机验收。完整 finish review 已指出规则窄桌面对齐、下载器原生限速行、筛选框宽度及实现文档四项修正；本次记录已落地的源码修正，修正后的视觉结论以随后复拍和复核记录为准。此前 `.impeccable/review` 的总览验收保留为历史证据，不替代本轮页面复核。\n\n性能与真实环境证据分开记录：`benchmark.json` 是本机合成 RPC 延迟配合真实 SQLite WAL 的对比，并非 NAS 万种子端到端或极限负载结论；`nas-native-batch-result.txt` 报告对真实 QB/TR 做了 (600) 项同值限速写入与回读，并核对全部 (6,638) 个种子的限速、Transmission 原生开关／保留值及配置未变。该记录是已有证据，本次文档整理没有独立重跑。它不证明任意新目标值、大规模真实持续写入、手机真机或本轮 NAS 部署验收。",
     "keyCharacteristics": [
-      "中性深浅两套主题，蓝色突出下载数据与焦点，其他状态有独立文字说明。",
+      "中性深浅两套主题，首次使用默认浅色并尊重已有偏好；蓝色突出下载数据、焦点与执行进度，其他状态有独立文字说明。",
       "系统中文字体、清楚的字号层级与等宽数字特性，优先保障扫描速度。",
       "平面容器与细分隔线，浮层才使用阴影。",
       "保留原有站点图标、管理表单和规则操作语义。",
-      "离线、部分数据、缺失与真实零值分别表达。"
+      "离线、部分数据、缺失与真实零值分别表达；处理、确认、失败、外部修改和暂缓各自计数。"
     ],
     "rules": [
       {
@@ -642,6 +773,11 @@
       {
         "name": "Known Value",
         "body": "零值必须来自有效观测；缺失、过期与部分贡献数据保留各自说明，不能通过数值兜底变成实时零。",
+        "section": "components"
+      },
+      {
+        "name": "Confirmed Progress",
+        "body": "已处理与已确认分别呈现；仅回读匹配或预读已匹配才计为确认，失败、外部修改、暂缓和中断保留可核对的状态。",
         "section": "components"
       }
     ],

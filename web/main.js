@@ -6,3 +6,4 @@ import './workspace.css';
 createApp(App).mount('#app');
 
 import './quick-actions.css';
+import './refinement.css';

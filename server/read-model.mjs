@@ -27,6 +27,7 @@ export class ReadModel {
     const summary={version:this.version,settings,clients,pools,poolStats,ruleCounts,total:rows.length,active:clients.reduce((n,v)=>n+v.active,0),managedCount:owned.length,conflictCount:statuses.counts.attention,matchedCount:rows.filter(t=>t.plan?.managed).length,blocked:c.plan.find(p=>p.execution?.includes('本轮限速计划未执行'))?.execution||'',history:s.history(settings.mode),topTorrents:[...rows].filter(t=>t.online).sort((a,b)=>b.upload+b.download-a.upload-a.download||a.key.localeCompare(b.key)).slice(0,5),syncing:c.busy,lastControl:c.lastControl,error:c.error,now};
     summary.quickActions={revision:quickRevision(s.get('quickActions',[])),runs:activeRuns(s,now)};
     summary.limitStatus=statuses.counts;
+    summary.controlJob=c.job.snapshot();
     this.cached={stamp,rows,byKey,plans,summary,owned,statuses}; return this.cached;
   }
   summary(){return this.snapshot().summary;}

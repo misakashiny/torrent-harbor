@@ -52,6 +52,13 @@ export class QbAdapter {
   }
   quantize(value) { return value == null ? null : Math.floor(value); }
   async readLimitState(id, direction) { return { value:await this.readLimit(id,direction) }; }
+  async readLimitStates(ids,direction) {
+    if(!ids.length)throw new Error('批量限速列表为空');
+    const result=await this.call(`torrents/${direction==='upload'?'uploadLimit':'downloadLimit'}`,{hashes:ids.join('|')});
+    return new Map(ids.filter(id=>Object.hasOwn(result,id)&&Number.isFinite(result[id])).map(id=>[String(id),{value:cap(result[id])}]));
+  }
+  async setLimits(ids,direction,value) { if(!ids.length)throw new Error('批量限速列表为空');await this.setLimit(ids.join('|'),direction,value); }
+  async restoreLimitStates(ids,direction,state) { await this.setLimits(ids,direction,state.value); }
   async restoreLimitState(id, direction, state) { await this.setLimit(id,direction,state.value); }
   async setLimit(id, direction, value) { await this.call(`torrents/set${direction === 'upload' ? 'Upload':'Download'}Limit`, { hashes:id, limit:String(value ?? 0) }); }
   async readLimit(id, direction) {
@@ -103,6 +110,19 @@ export class TrAdapter {
     if(result.torrents?.length!==1) throw new Error('TR 未返回原始限速状态');
     const t=result.torrents[0];
     return { enabled:Boolean(pick(t,`${direction}Limited`,false)), amount:Number(pick(t,`${direction}Limit`,0)), value:pick(t,`${direction}Limited`,false)?Number(pick(t,`${direction}Limit`,0))*this.unit:null };
+  }
+  async readLimitStates(ids,direction) {
+    if(!ids.length)throw new Error('批量限速列表为空');
+    const result=await this.rpc('torrent-get',{ids,fields:['id','hashString',`${direction}Limited`,`${direction}Limit`]});
+    return new Map((result.torrents||[]).filter(t=>typeof pick(t,`${direction}Limited`)==='boolean'&&Number.isFinite(pick(t,`${direction}Limit`))).map(t=>[String(pick(t,'hashString')||pick(t,'id')),{enabled:pick(t,`${direction}Limited`),amount:pick(t,`${direction}Limit`),value:pick(t,`${direction}Limited`)?pick(t,`${direction}Limit`)*this.unit:null}]));
+  }
+  async setLimits(ids,direction,value) {
+    if(!ids.length)throw new Error('批量限速列表为空');
+    await this.rpc('torrent-set',{ids,[`${direction}Limited`]:value!=null,...(value==null?{}:{[`${direction}Limit`]:Math.floor(value/this.unit)})});
+  }
+  async restoreLimitStates(ids,direction,state) {
+    if(!ids.length||typeof state.enabled!=='boolean'||!Number.isFinite(state.amount)||state.amount<0)throw new Error('TR 原始限速状态无效');
+    await this.rpc('torrent-set',{ids,[`${direction}Limited`]:state.enabled,[`${direction}Limit`]:state.amount});
   }
   async restoreLimitState(id, direction, state) {
     if(typeof state.enabled!=='boolean'||!Number.isFinite(state.amount)||state.amount<0) throw new Error('TR 原始限速状态无效');

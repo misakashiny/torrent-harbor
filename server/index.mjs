@@ -131,7 +131,7 @@ const server=http.createServer(async(req,res)=>{
       if(path==='/api/auth/password'&&method==='POST') { const b=await body(req); if(!store.verify(String(b.current||''))) fail('当前密码不正确',403); store.set('admin',store.password(password(b.password))); sessions.clear(); return signin(res); }
       if(path==='/api/state'&&method==='GET') return json(res,{...controller.state(),version:appMeta.version});
       if(path==='/api/refresh'&&method==='POST') { await controller.refresh(false); return json(res,readModel.summary()); }
-      if(path==='/api/release'&&method==='POST') { if(controller.busy) fail('正在同步下载器，请稍后重试',409); return json(res,await controller.release()); }
+      if(path==='/api/release'&&method==='POST') { if(controller.busy) fail('正在同步下载器，请稍后重试',409);const hasRecords=Object.keys(store.get('managed',{})).some(k=>k.startsWith(store.get('settings').mode+'|'));const work=controller.release();if(!hasRecords)return json(res,await work);void work.catch(e=>{store.event('释放接管未完成',e.message,'error',{code:'control.release_failed'});});return json(res,{accepted:true,job:controller.job.snapshot()},202); }
       if(path==='/api/reclaim'&&method==='POST') { const b=await body(req); if(controller.busy) fail('正在同步下载器，请稍后重试',409); try { await controller.reclaim(clean(b.key)); } catch(e) { fail(e.message,422); } return json(res,{ok:true}); }
       if(path==='/api/clients/test'&&method==='POST') {
         const b=await body(req), old=store.get('clients',[]).find(c=>c.id===b.id);

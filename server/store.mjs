@@ -22,6 +22,11 @@ export class Store {
   }
   get(key, fallback = null) { const row = this.db.prepare('SELECT value FROM kv WHERE key=?').get(key); return row ? JSON.parse(row.value) : fallback; }
   set(key, value) { this.db.prepare('INSERT INTO kv VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, JSON.stringify(value)); return value; }
+  setMany(values) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try { for(const [key,value] of Object.entries(values))this.set(key,value);this.db.exec('COMMIT'); }
+    catch(e){this.db.exec('ROLLBACK');throw e;}
+  }
   seal(value) {
     if (!value) return '';
     const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', this.key, iv);
