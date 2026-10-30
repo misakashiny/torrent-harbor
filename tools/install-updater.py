@@ -16,7 +16,7 @@ def main():
     project=container['Config']['Labels'].get('com.docker.compose.project','torrent-harbor')
     directory=root/'updater';directory.mkdir(mode=0o700,exist_ok=True);os.chmod(directory,0o700)
     target=directory/'harbor-updater.py';shutil.copy2(pathlib.Path(__file__).with_name('harbor-updater.py'),target);os.chmod(target,0o700)
-    config={'root':str(root),'compose':str(root/'compose.yaml'),'repository':args.repository,'dataDir':str(pathlib.Path(mounts['/app/data']).resolve()),'stateDir':str(pathlib.Path(mounts['/app/updates']).resolve()),'container':'torrent-harbor','project':project,'healthUrl':'http://127.0.0.1:8787/api/health'}
+    config={'root':str(root),'compose':str(root/'compose.yaml'),'repository':args.repository,'dataDir':str(pathlib.Path(mounts['/app/data']).resolve()),'stateDir':str(pathlib.Path(mounts['/app/updates']).resolve()),'dataVolume':next((m.get('Name') for m in container['Mounts'] if m['Destination']=='/app/data'),None),'container':'torrent-harbor','project':project,'healthUrl':'http://127.0.0.1:8787/api/health'}
     config_path=directory/'config.json';config_path.write_text(json.dumps(config,indent=2));os.chmod(config_path,0o600)
     python=shutil.which('python3')
     unit='[Unit]\nDescription=Torrent Harbor release updater\nAfter=docker.service network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart='+python+' "'+str(target)+'" --config "'+str(config_path)+'"\nRestart=always\nRestartSec=10\nUMask=0077\nNoNewPrivileges=true\nPrivateTmp=true\n\n[Install]\nWantedBy=multi-user.target\n'

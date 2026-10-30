@@ -55,7 +55,7 @@ class Updater:
         atomic_json(self.state/'status.json',{'id':job['id'],'state':state,'message':message,'action':job.get('action'),'tag':job.get('tag'),'time':int(time.time()*1000),**extra})
     def heartbeat(self):
         previous=self.journal.get('previous')
-        atomic_json(self.state/'agent.json',{'repository':self.repository,'heartbeat':int(time.time()*1000),'previousVersion':previous.get('version') if previous else None,'platform':self.platform})
+        atomic_json(self.state/'agent.json',{'repository':self.repository,'heartbeat':int(time.time()*1000),'previousVersion':previous.get('version') if previous else None,'platform':self.platform,'recoveryNeeded':bool(self.journal.get('pending'))})
     def assert_identity(self):
         item=json.loads(command(['docker','inspect',self.container]))[0]
         mount=next((m for m in item['Mounts'] if m['Destination']=='/app/data'),None)
@@ -130,6 +130,10 @@ class Updater:
     def start(self,image):
         self.save_override(image)
         command(['docker','compose','-p',self.project,'-f',str(self.compose),'-f',str(self.override),'up','-d','--no-build','--pull','never','torrent-harbor'],timeout=90)
+    def stop(self):
+        try:command(['docker','stop','--time','20',self.container],timeout=35)
+        except RuntimeError as error:
+            if not any(text in str(error).lower() for text in ['no such container','no such object']):raise
     def healthy(self,version,timeout=75):
         deadline=time.time()+timeout
         while time.time()<deadline:
@@ -152,7 +156,10 @@ class Updater:
     def restore_data(self,snapshot):
         source=pathlib.Path(snapshot['backup']).resolve()/'data'
         if not source.parent.is_relative_to((self.root/'backups'/'updates').resolve()) or not source.is_dir():raise ValueError('Rollback snapshot is unavailable')
-        self.assert_identity()
+        if self.config.get('dataVolume'):
+            volume=json.loads(command(['docker','volume','inspect',self.config['dataVolume']]))[0]
+            if pathlib.Path(volume['Mountpoint']).resolve()!=self.data:raise ValueError('Managed data volume changed')
+        else:self.assert_identity()
         for path in self.data.iterdir():
             if path.is_symlink() or path.is_file():path.unlink()
             elif path.is_dir():
@@ -160,6 +167,7 @@ class Updater:
                 shutil.rmtree(path)
         command(['cp','-a',str(source)+'/.',str(self.data)],timeout=90)
     def execute(self,job):
+        if self.journal.get('pending'):raise RuntimeError('存在待恢复的版本操作，请先检查主机更新服务日志并重启执行器')
         if not re.fullmatch(r'[a-f0-9-]{36}',str(job.get('id',''))):raise ValueError('Invalid update job')
         if job.get('repository','').lower()!=self.repository.lower():raise ValueError('Update source differs from the host-pinned repository')
         if not 0<=time.time()*1000-job.get('requestedAt',0)<600000:raise ValueError('Update request expired')
@@ -172,7 +180,7 @@ class Updater:
         self.assert_idle();self.status(job,'backing-up','正在停止应用并备份更新前数据')
         self.journal['pending']={'job':job,'old':old,'backup':None}
         atomic_json(self.root/'updater-journal.json',self.journal,0o600)
-        command(['docker','stop','--time','20',self.container],timeout=35)
+        self.stop()
         backup=None
         try:
             backup=self.backup(job,old)
@@ -189,7 +197,7 @@ class Updater:
         except Exception as error:
             self.status(job,'rolling-back','操作失败，正在恢复原版本与数据')
             try:
-                command(['docker','stop','--time','20',self.container],timeout=35)
+                self.stop()
                 if backup:self.restore_data(backup)
                 self.start(old['image'])
                 if not self.healthy(old['version']):raise RuntimeError('Original version recovery did not pass health check')
@@ -204,8 +212,7 @@ class Updater:
         job=pending['job'];old=pending['old']
         self.status(job,'rolling-back','检测到中断的版本操作，正在恢复更新前版本')
         try:
-            self.assert_identity()
-            command(['docker','stop','--time','20',self.container],timeout=35)
+            self.stop()
             if pending.get('backup'):self.restore_data(pending['backup'])
             self.start(old['image'])
             if not self.healthy(old['version']):raise RuntimeError('Interrupted update recovery failed health check')

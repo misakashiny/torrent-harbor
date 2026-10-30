@@ -34,7 +34,7 @@ export class UpdateManager {
     const age=agent?Date.now()-agent.heartbeat:Infinity;
     const fresh=agent&&age>=0&&age<30000;
     const pinned=fresh&&typeof agent.repository==='string'&&agent.repository.toLowerCase()===config.repository.toLowerCase();
-    return {...config,version:this.version,platform:this.platform,hasToken:!!this.store.get('updatesToken'),available:config.latest?isNewer(config.latest.tag,this.version):false,agentConnected:!!fresh,canInstall:!!pinned,agent:agent?{repository:agent.repository,previousVersion:agent.previousVersion||null}:null,job};
+    return {...config,version:this.version,platform:this.platform,hasToken:!!this.store.get('updatesToken'),available:config.latest?isNewer(config.latest.tag,this.version):false,agentConnected:!!fresh,canInstall:!!pinned&&!agent?.recoveryNeeded,agent:agent?{repository:agent.repository,previousVersion:agent.previousVersion||null,recoveryNeeded:!!agent.recoveryNeeded}:null,job};
   }
   configure(input) {
     if(this.checking) throw new Error('正在检查版本，请稍后修改来源');
@@ -74,7 +74,7 @@ export class UpdateManager {
   }
   assertIdle() {
     if(this.store.get('settings').controlEnabled || Object.keys(this.store.get('managed',{})).length) throw new Error('更新前请先释放接管，确认已恢复下载器设置');
-    const state=this.status();if(!state.canInstall) throw new Error(state.agentConnected?'仓库与主机更新执行器的固定来源不一致':'主机更新执行器未连接，请先按部署说明安装');
+    const state=this.status();if(state.agent?.recoveryNeeded)throw new Error('主机存在待恢复的版本操作，请检查更新服务日志');if(!state.canInstall) throw new Error(state.agentConnected?'仓库与主机更新执行器的固定来源不一致':'主机更新执行器未连接，请先按部署说明安装');
     if(state.job&&['queued','downloading','verifying','backing-up','installing','checking','rolling-back'].includes(state.job.state)) throw new Error('已有更新任务正在执行');
     return state;
   }

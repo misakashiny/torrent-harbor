@@ -12,7 +12,7 @@ WORKDIR /app
 COPY --from=build --chown=node:node /build/dist ./dist
 COPY --chown=node:node server ./server
 COPY --chown=node:node package.json ./package.json
-RUN mkdir -p /app/data /app/updates && chown node:node /app/data /app/updates
+RUN chmod -R a+rX /app/server /app/dist && chmod a+r /app/package.json && mkdir -p /app/data /app/updates && chown node:node /app/data /app/updates
 USER node
 EXPOSE 8787
 VOLUME ["/app/data", "/app/updates"]

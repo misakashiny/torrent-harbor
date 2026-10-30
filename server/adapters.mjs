@@ -72,6 +72,7 @@ export class TrAdapter {
   async snapshot() {
     const session = await this.rpc('session-get');
     const version = String(session.version || '');
+    this.legacySpeedLimits=/^(?:[1-3]\.|4\.0\.)/.test(version);
     if (/^4\.(?:[1-9]|\d{2,})\./.test(version) || /^[5-9]\./.test(version)) this.modern = true;
     const units = pick(session,'units',{}); this.unit = Number(pick(units,'speed-bytes',1000)) || 1000;
     const [response, stats] = await Promise.all([this.rpc('torrent-get',{ fields:['id','hashString','name','percentDone','totalSize','uploadedEver','downloadedEver','uploadRatio','rateUpload','rateDownload','uploadLimit','uploadLimited','downloadLimit','downloadLimited','labels','trackers','status','error','honorsSessionLimits',...(/^3\./.test(version)?[]:['group'])] }), this.rpc('session-stats')]);
@@ -79,10 +80,14 @@ export class TrAdapter {
     if (!Array.isArray(rows)) throw new Error('TR 返回的种子列表格式异常');
     const alt = Boolean(pick(session,'alt-speed-enabled',false));
     return { version, upload:pick(stats,'uploadSpeed',0), download:pick(stats,'downloadSpeed',0),
-      native: { upload:alt ? cap(pick(session,'alt-speed-up',0)*this.unit) : pick(session,'speed-limit-up-enabled',false) ? cap(pick(session,'speed-limit-up',0)*this.unit):null, download:alt ? cap(pick(session,'alt-speed-down',0)*this.unit) : pick(session,'speed-limit-down-enabled',false) ? cap(pick(session,'speed-limit-down',0)*this.unit):null, alternative:alt, note:'原生全局与既有带宽分组仍生效；本程序使用统一单种配额协调' },
+      native: { upload:alt ? cap(pick(session,'alt-speed-up',0)*this.unit) : pick(session,'speed-limit-up-enabled',false) ? cap(pick(session,'speed-limit-up',0)*this.unit):null, download:alt ? cap(pick(session,'alt-speed-down',0)*this.unit) : pick(session,'speed-limit-down-enabled',false) ? cap(pick(session,'speed-limit-down',0)*this.unit):null, alternative:alt, minimumLimit:this.legacySpeedLimits?32768:this.unit, note:this.legacySpeedLimits?'旧版 TR 小额限速存在块粒度问题，按 32 KiB/s 向下保守分配；低于该值拒绝执行。原生全局与既有分组仍生效':'原生全局与既有带宽分组仍生效；本程序使用统一单种配额协调' },
       torrents:rows.map(t => ({ id:pick(t,'hashString') || pick(t,'id'), hash:pick(t,'hashString'), name:t.name, progress:pick(t,'percentDone',0), size:pick(t,'totalSize',0), uploaded:pick(t,'uploadedEver',0), downloaded:pick(t,'downloadedEver',0), ratio:pick(t,'uploadRatio',0), upload:pick(t,'rateUpload',0), download:pick(t,'rateDownload',0), uploadLimit:pick(t,'uploadLimited',false) ? Number(pick(t,'uploadLimit',0))*this.unit:null, downloadLimit:pick(t,'downloadLimited',false) ? Number(pick(t,'downloadLimit',0))*this.unit:null, tags:pick(t,'labels',[]), category:'', hosts:[...new Set((t.trackers || []).map(x => trackerHost(x.announce)).filter(Boolean))], metadataReady:true, state:t.error ? 'error' : t.status === 0 ? 'paused' : [1,2].includes(t.status) ? 'checking' : [3,4].includes(t.status) ? 'downloading' : 'seeding', nativeState:t.status, nativeGroup:t.group || '', honorsSessionLimits:pick(t,'honorsSessionLimits',true) })) };
   }
-  quantize(value) { return value == null ? null : Math.floor(value/this.unit)*this.unit; }
+  // TR <=4.0 accounts in 16 KiB blocks. Live 4.0.5 transfers reached ~32 KiB/s
+  // despite a 16 kB/s readback. Reserve full 32 KiB quanta, write 32 decimal kB.
+  // Upstream: https://github.com/transmission/transmission/pull/7339
+  quantize(value) { return value == null ? null : this.legacySpeedLimits?Math.floor(value/32768)*32*this.unit:Math.floor(value/this.unit)*this.unit; }
+  limitProblem(value) { return this.legacySpeedLimits&&value!=null&&value<32768?'旧版 TR 单种份额低于 32 KiB/s，无法可靠执行；请增加预算、减少成员或升级 TR 至 4.1 及以上':''; }
   async readLimitState(id, direction) {
     const result=await this.rpc('torrent-get',{ids:[id],fields:[`${direction}Limited`,`${direction}Limit`]});
     if(result.torrents?.length!==1) throw new Error('TR 未返回原始限速状态');

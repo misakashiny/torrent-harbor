@@ -54,6 +54,18 @@ export class Controller {
   replan() { this.plan = buildPlan(this.torrents(),this.store.get('rules',[]),this.store.get('pools',[]),this.store.get('settings'),this.store.get('overrides',{})).map(p=>({...p,execution:this.results.get(p.key)||''})); }
   managedKey(key,dir) { return `${this.store.get('settings').mode}|${key}|${dir}`; }
   async apply() {
+    this.plan.forEach(p=>{p.execution='';});
+    const unsupported=this.plan.filter(p=>p.managed&&p.online).flatMap(p=>{
+      const c=this.clients().find(c=>c.id===p.clientId),adapter=c&&this.adapter(c);
+      return ['upload','download'].map(dir=>adapter?.limitProblem?.(p[dir])).filter(Boolean);
+    });
+    if(unsupported.length){
+      const message=unsupported[0]+'；本轮限速计划未执行';
+      for(const p of this.plan.filter(p=>p.managed)){p.execution=message;this.results.set(p.key,message);}
+      if(this.lastUnsupported!==message)this.store.event('限速计划无法执行',message,'warning');
+      this.lastUnsupported=message;return;
+    }
+    this.lastUnsupported='';
     const owned = this.store.get('managed',{}), mode = this.store.get('settings').mode, tasks = [], valid = new Set();
     const liveByKey = new Map(this.torrents().map(t=>[t.key,t])), planByKey = new Map(this.plan.map(p=>[p.key,p]));
     let blockIncrease = false;
@@ -72,6 +84,7 @@ export class Controller {
             record.conflict = true; p.execution = '外部修改，已让出控制'; blockIncrease = true; continue;
           }
           if (!sameLimit(current,target) || !record) tasks.push({key,p,dir,target,current,adapter,c,record});
+          else p.execution='已回读确认（保持）';
         } catch (e) { blockIncrease = true; p.execution = e.message; }
       }
     }
